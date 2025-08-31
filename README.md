@@ -1,8 +1,18 @@
-# QuillPilot 🖋️
+# 🖋️ QuillPilot
 
-> AI-powered writing assistant for content creators
+**AI-Powered Writing Assistant for Content Creators**
 
-QuillPilot is a desktop application built with Electron, React, and Python that helps writers and content creators produce high-quality blog content using AI assistance. It supports both local AI models (via Ollama) and cloud-based AI services (OpenAI).
+QuillPilot is a desktop application that helps writers and content creators produce high-quality blog content using AI assistance. It runs completely on your computer and supports both local AI models (like Llama3 via Ollama) and cloud-based AI services (OpenAI).
+
+## 🎯 Quick Start for Writers
+
+**Just want to start writing?**
+
+1. **Double-click** `QuillPilot.command` in your QuillPilot folder
+2. The app will guide you through any setup needed
+3. Start creating amazing blog content with AI assistance!
+
+*For detailed setup instructions, see the [Setup Guide](#setup-guide) below.*
 
 ## ✨ Features
 
@@ -14,7 +24,39 @@ QuillPilot is a desktop application built with Electron, React, and Python that 
 - **File Management**: Save, load, and export content in multiple formats
 - **Desktop Integration**: Native desktop app with menu integration
 
-## 🚀 Getting Started
+## 🎨 Using QuillPilot (For Writers)
+
+### Creating Your First Blog Post
+1. **Click "New Blog Post"** in the app
+2. **Add a title** for your blog post
+3. **Choose your approach**:
+   - Write manually and use AI to help improve
+   - Let AI generate a complete blog post from a topic
+   - Use templates (How-to guides, Lists, Reviews, etc.)
+
+### Using AI Features
+1. **Click the magic wand icon** (🪄) to open AI Assistant
+2. **Choose your AI**:
+   - **Ollama (Local)** - Free, private, runs on your computer
+   - **OpenAI** - Requires API key, very powerful
+3. **Pick a model** (like llama3 for local AI)
+4. **Type what you want** and click Generate!
+
+### AI Writing Templates
+- **How-To Guide** - Step-by-step instructions
+- **Listicle** - "10 Best..." or "5 Ways to..." posts
+- **Product Review** - Balanced reviews with pros/cons
+- **Opinion Piece** - Your thoughts and arguments
+- **News Article** - Factual reporting style
+
+### Writing Workflow Tips
+1. **Start with AI**: Generate a first draft or outline
+2. **Edit and personalize**: Add your voice and experiences
+3. **Use AI for improvement**: Select text and ask AI to improve it
+4. **SEO optimization**: AI automatically suggests keywords
+5. **Export when done**: Save as Markdown or HTML
+
+## 🚀 Setup Guide
 
 ### Prerequisites
 
@@ -25,24 +67,25 @@ QuillPilot is a desktop application built with Electron, React, and Python that 
 
 ### Installation
 
+**For Writers (Simple):**
+1. Get the QuillPilot folder
+2. Double-click `QuillPilot.command`
+3. Follow any setup prompts - the app will guide you!
+
+**For Developers:**
 1. **Clone the repository**:
    ```bash
    git clone <repository-url>
    cd QuillPilot
    ```
 
-2. **Install Node.js dependencies**:
+2. **Install dependencies**:
    ```bash
    npm install
+   cd src/python && pip install -r requirements.txt
    ```
 
-3. **Set up Python backend**:
-   ```bash
-   cd src/python
-   pip install -r requirements.txt
-   ```
-
-4. **Configure environment** (optional):
+3. **Configure environment** (optional):
    ```bash
    # Copy the environment template
    cp src/python/env_example.txt src/python/.env
@@ -80,29 +123,32 @@ QuillPilot is a desktop application built with Electron, React, and Python that 
 
 2. **Add your API key**: Use the AI Settings panel in the app or add it to your `.env` file
 
-### Running the Application
+### Starting QuillPilot
 
-#### Development Mode
-
+**For Everyone:**
 ```bash
-# Start all services in development mode
+# The main way to start QuillPilot
+./start.sh
+```
+
+**Alternative Methods:**
+```bash
+# Quick start for developers
 npm run dev
-```
 
-This will:
-- Start the React development server (port 3000)
-- Start the Python backend (port 5000)
-- Launch the Electron app
-
-#### Production Mode
-
-```bash
-# Build the React app
-npm run build
-
-# Start the Electron app
+# Just the desktop app (if services are running)
 npm start
+
+# Individual services
+npm run dev:react    # Web interface only
+npm run dev:python   # AI backend only
 ```
+
+**What happens when you start:**
+- React development server starts (http://localhost:3000)
+- Python Flask backend starts (http://localhost:5001)
+- Electron desktop app opens automatically
+- Your Ollama models are detected and ready to use
 
 ## 🏗️ Architecture
 
@@ -206,28 +252,50 @@ npm run build:electron
 - `aiService.generateContent()` - Generate custom text
 - `aiService.getBlogTemplates()` - Get available templates
 
-## 🐛 Troubleshooting
+## 🆘 Troubleshooting
 
-### Common Issues
+### For Writers
+
+**"AI services not available"**
+- Make sure Ollama is running: open Terminal and type `ollama serve`
+- Or add your OpenAI API key in Settings
+
+**"QuillPilot won't start"**
+- Make sure Node.js and Python are installed
+- Try double-clicking the `QuillPilot.command` file
+- Check that all prerequisites are installed
+
+**"Can't find my blog posts"**
+- Your posts are saved locally in the app
+- Use File > Export to save them as files
+
+### For Developers
 
 **AI Service Not Available**
 - Ensure Ollama is running: `ollama serve`
 - Check your OpenAI API key is valid
-- Verify Python backend is running on port 5000
+- Verify Python backend is running on port 5001 (not 5000 due to macOS AirPlay)
 
 **Electron App Won't Start**
 - Run `npm install` to ensure all dependencies are installed
 - Check that React build exists: `npm run build`
+- Try `./start.sh` instead of `npm run dev`
 
 **Python Backend Issues**
 - Install Python dependencies: `pip install -r src/python/requirements.txt`
 - Check Python version is 3.8 or higher
+- Port 5000 conflict: We use port 5001 to avoid macOS AirPlay
+
+**Port Conflicts**
+- Stop existing processes: `pkill -f "react-scripts|python3.*app.py"`
+- The startup script handles this automatically
 
 ### Performance Tips
 
 - **Local AI**: Use smaller models like `mistral` for faster responses
 - **Cloud AI**: Use `gpt-3.5-turbo` for cost-effective generation
 - **Memory**: Close unused posts in the editor to save memory
+- **Best Models**: `llama3` for quality, `mistral` for speed
 
 ## 🤝 Contributing
 
