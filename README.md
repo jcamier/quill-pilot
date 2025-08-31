@@ -60,7 +60,7 @@ QuillPilot is a desktop application built with Electron, React, and Python that 
 2. **Pull a model** (choose one):
    ```bash
    # General purpose model (recommended)
-   ollama pull llama2
+   ollama pull llama3
 
    # Code-focused model
    ollama pull codellama

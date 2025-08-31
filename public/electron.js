@@ -1,7 +1,9 @@
 const { app, BrowserWindow, Menu, ipcMain, dialog } = require('electron');
 const path = require('path');
-const isDev = require('electron-is-dev');
 const { spawn } = require('child_process');
+
+// Check if we're in development mode
+const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
 
 // Keep a global reference of the window object
 let mainWindow;
@@ -61,9 +63,9 @@ function startPythonBackend() {
     ? path.join(__dirname, '../src/python/app.py')
     : path.join(process.resourcesPath, 'src/python/app.py');
 
-  console.log('Starting Python backend...');
+    console.log('Starting Python backend...');
 
-  pythonProcess = spawn('python', [pythonPath], {
+  pythonProcess = spawn('python3', [pythonPath], {
     stdio: ['pipe', 'pipe', 'pipe']
   });
 

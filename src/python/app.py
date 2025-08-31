@@ -46,7 +46,7 @@ class AIContentGenerator:
         )
         return response.choices[0].message.content
 
-    def generate_content_ollama(self, prompt, model="llama2", max_tokens=1000):
+    def generate_content_ollama(self, prompt, model="llama3", max_tokens=1000):
         """Generate content using local Ollama models"""
         if not self.ollama_available:
             raise ValueError("Ollama not available")
@@ -98,7 +98,7 @@ Please format the response as JSON with the following structure:
                 default_model = model or "gpt-3.5-turbo"
                 content = self.generate_content_openai(prompt, default_model, length_config[length]['max_tokens'])
             else:  # ollama
-                default_model = model or "llama2"
+                default_model = model or "llama3"
                 content = self.generate_content_ollama(prompt, default_model, length_config[length]['max_tokens'])
 
             # Try to parse as JSON, fallback to plain text if needed
@@ -224,4 +224,4 @@ if __name__ == '__main__':
     print("Starting QuillPilot AI Backend...")
     print(f"OpenAI Available: {content_generator.openai_client is not None}")
     print(f"Ollama Available: {content_generator.ollama_available}")
-    app.run(debug=True, port=5000)
+    app.run(debug=True, port=5001)

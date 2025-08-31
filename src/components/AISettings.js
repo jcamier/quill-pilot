@@ -143,7 +143,7 @@ const AISettings = ({ aiModels, aiStatus, onRefresh }) => {
                   <h4 className="font-medium text-yellow-800 mb-2">Setup Instructions</h4>
                   <ol className="text-sm text-yellow-700 space-y-1 list-decimal list-inside">
                     <li>Install Ollama from <a href="https://ollama.ai" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">ollama.ai</a></li>
-                    <li>Run: <code className="bg-yellow-100 px-1 rounded">ollama pull llama2</code></li>
+                    <li>Run: <code className="bg-yellow-100 px-1 rounded">ollama pull llama3</code></li>
                     <li>Start the service: <code className="bg-yellow-100 px-1 rounded">ollama serve</code></li>
                   </ol>
                 </div>
