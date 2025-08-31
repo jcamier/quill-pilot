@@ -199,8 +199,8 @@ function App() {
     );
   }
 
-  return (
-    <div className="flex h-screen bg-gray-50">
+    return (
+    <div className="flex min-h-screen bg-gray-50">
       <Sidebar
         currentView={currentView}
         setCurrentView={setCurrentView}
@@ -211,7 +211,7 @@ function App() {
         currentPost={currentPost}
       />
 
-      <main className="flex-1 overflow-hidden">
+      <main className="flex-1">
         {currentView === 'dashboard' && (
           <Dashboard
             blogPosts={blogPosts}
