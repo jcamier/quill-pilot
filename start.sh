@@ -45,7 +45,7 @@ fi
 # Check if Python dependencies are installed
 echo "📦 Checking Python dependencies..."
 cd src/python
-if ! python3 -c "import flask, ollama, requests" >/dev/null 2>&1; then
+if ! python3 -c "import fastapi, uvicorn, ollama, requests" >/dev/null 2>&1; then
     echo "Installing Python dependencies..."
     pip install -r requirements.txt
 fi

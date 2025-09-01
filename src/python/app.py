@@ -1,5 +1,7 @@
-from flask import Flask, request, jsonify
-from flask_cors import CORS
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+from typing import Optional, List, Dict, Any
 import os
 import requests
 import json
@@ -10,8 +12,62 @@ from openai import OpenAI
 # Load environment variables
 load_dotenv()
 
-app = Flask(__name__)
-CORS(app)
+# Pydantic models for request validation
+class BlogGenerationRequest(BaseModel):
+    topic: str
+    style: str = "informative"
+    length: str = "medium"
+    ai_provider: str = "ollama"
+    model: Optional[str] = None
+
+class ContentGenerationRequest(BaseModel):
+    prompt: str
+    ai_provider: str = "ollama"
+    model: Optional[str] = None
+    max_tokens: int = 1000
+
+# Response models
+class HealthResponse(BaseModel):
+    status: str
+    openai_available: bool
+    ollama_available: bool
+
+class ModelsResponse(BaseModel):
+    openai: List[str]
+    ollama: List[str]
+
+class BlogPostResponse(BaseModel):
+    success: bool
+    blog_post: Optional[Dict[str, Any]] = None
+    error: Optional[str] = None
+
+class ContentResponse(BaseModel):
+    success: bool
+    content: Optional[str] = None
+    error: Optional[str] = None
+
+class RootResponse(BaseModel):
+    name: str
+    status: str
+    version: str
+
+# Initialize FastAPI app
+app = FastAPI(
+    title="QuillPilot AI Backend",
+    description="AI-powered writing assistant backend",
+    version="1.0.0",
+    docs_url="/docs",
+    redoc_url="/redoc"
+)
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # In production, replace with specific origins
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 class AIContentGenerator:
     def __init__(self):
@@ -33,7 +89,7 @@ class AIContentGenerator:
         except:
             self.ollama_available = False
 
-    def generate_content_openai(self, prompt, model="gpt-3.5-turbo", max_tokens=1000):
+    async def generate_content_openai(self, prompt: str, model: str = "gpt-3.5-turbo", max_tokens: int = 1000) -> str:
         """Generate content using OpenAI GPT models"""
         if not self.openai_client:
             raise ValueError("OpenAI client not configured")
@@ -46,7 +102,7 @@ class AIContentGenerator:
         )
         return response.choices[0].message.content
 
-    def generate_content_ollama(self, prompt, model="llama3", max_tokens=1000):
+    async def generate_content_ollama(self, prompt: str, model: str = "llama3", max_tokens: int = 1000) -> str:
         """Generate content using local Ollama models"""
         if not self.ollama_available:
             raise ValueError("Ollama not available")
@@ -58,7 +114,8 @@ class AIContentGenerator:
         )
         return response['response']
 
-    def generate_blog_post(self, topic, style="informative", length="medium", ai_provider="ollama", model=None):
+    async def generate_blog_post(self, topic: str, style: str = "informative", length: str = "medium",
+                                ai_provider: str = "ollama", model: Optional[str] = None) -> Dict[str, Any]:
         """Generate a complete blog post based on topic and parameters"""
 
         # Define length parameters
@@ -96,10 +153,10 @@ Please format the response as JSON with the following structure:
         try:
             if ai_provider == "openai":
                 default_model = model or "gpt-3.5-turbo"
-                content = self.generate_content_openai(prompt, default_model, length_config[length]['max_tokens'])
+                content = await self.generate_content_openai(prompt, default_model, length_config[length]['max_tokens'])
             else:  # ollama
                 default_model = model or "llama3"
-                content = self.generate_content_ollama(prompt, default_model, length_config[length]['max_tokens'])
+                content = await self.generate_content_ollama(prompt, default_model, length_config[length]['max_tokens'])
 
             # Try to parse as JSON, fallback to plain text if needed
             try:
@@ -120,26 +177,28 @@ Please format the response as JSON with the following structure:
 # Initialize the content generator
 content_generator = AIContentGenerator()
 
-@app.route('/', methods=['GET', 'HEAD'])
-def root():
+# Routes
+@app.get("/", response_model=RootResponse)
+@app.head("/")
+async def root():
     """Root endpoint for wait-on health checks"""
-    return jsonify({
-        "name": "QuillPilot AI Backend",
-        "status": "running",
-        "version": "1.0.0"
-    })
+    return RootResponse(
+        name="QuillPilot AI Backend",
+        status="running",
+        version="1.0.0"
+    )
 
-@app.route('/api/health', methods=['GET'])
-def health_check():
+@app.get("/api/health", response_model=HealthResponse)
+async def health_check():
     """Health check endpoint"""
-    return jsonify({
-        "status": "healthy",
-        "openai_available": content_generator.openai_client is not None,
-        "ollama_available": content_generator.ollama_available
-    })
+    return HealthResponse(
+        status="healthy",
+        openai_available=content_generator.openai_client is not None,
+        ollama_available=content_generator.ollama_available
+    )
 
-@app.route('/api/models', methods=['GET'])
-def get_available_models():
+@app.get("/api/models", response_model=ModelsResponse)
+async def get_available_models():
     """Get list of available AI models"""
     models = {
         "openai": [],
@@ -158,79 +217,62 @@ def get_available_models():
         except:
             models["ollama"] = ["llama2"]  # Default fallback
 
-    return jsonify(models)
+    return ModelsResponse(**models)
 
-@app.route('/api/generate-blog', methods=['POST'])
-def generate_blog():
+@app.post("/api/generate-blog", response_model=BlogPostResponse)
+async def generate_blog(request: BlogGenerationRequest):
     """Generate blog post content"""
     try:
-        data = request.get_json()
-
-        # Extract parameters
-        topic = data.get('topic', '')
-        style = data.get('style', 'informative')
-        length = data.get('length', 'medium')
-        ai_provider = data.get('ai_provider', 'ollama')
-        model = data.get('model')
-
-        if not topic:
-            return jsonify({"error": "Topic is required"}), 400
+        if not request.topic:
+            raise HTTPException(status_code=400, detail="Topic is required")
 
         # Generate blog post
-        blog_post = content_generator.generate_blog_post(
-            topic=topic,
-            style=style,
-            length=length,
-            ai_provider=ai_provider,
-            model=model
+        blog_post = await content_generator.generate_blog_post(
+            topic=request.topic,
+            style=request.style,
+            length=request.length,
+            ai_provider=request.ai_provider,
+            model=request.model
         )
 
-        return jsonify({
-            "success": True,
-            "blog_post": blog_post
-        })
+        return BlogPostResponse(
+            success=True,
+            blog_post=blog_post
+        )
 
     except Exception as e:
-        return jsonify({
-            "success": False,
-            "error": str(e)
-        }), 500
+        raise HTTPException(status_code=500, detail=str(e))
 
-@app.route('/api/generate-content', methods=['POST'])
-def generate_content():
+@app.post("/api/generate-content", response_model=ContentResponse)
+async def generate_content(request: ContentGenerationRequest):
     """Generate custom content based on prompt"""
     try:
-        data = request.get_json()
-
-        prompt = data.get('prompt', '')
-        ai_provider = data.get('ai_provider', 'ollama')
-        model = data.get('model')
-        max_tokens = data.get('max_tokens', 1000)
-
-        if not prompt:
-            return jsonify({"error": "Prompt is required"}), 400
+        if not request.prompt:
+            raise HTTPException(status_code=400, detail="Prompt is required")
 
         # Generate content
-        if ai_provider == "openai":
-            default_model = model or "gpt-3.5-turbo"
-            content = content_generator.generate_content_openai(prompt, default_model, max_tokens)
+        if request.ai_provider == "openai":
+            default_model = request.model or "gpt-3.5-turbo"
+            content = await content_generator.generate_content_openai(
+                request.prompt, default_model, request.max_tokens
+            )
         else:  # ollama
-            default_model = model or "llama2"
-            content = content_generator.generate_content_ollama(prompt, default_model, max_tokens)
+            default_model = request.model or "llama2"
+            content = await content_generator.generate_content_ollama(
+                request.prompt, default_model, request.max_tokens
+            )
 
-        return jsonify({
-            "success": True,
-            "content": content
-        })
+        return ContentResponse(
+            success=True,
+            content=content
+        )
 
     except Exception as e:
-        return jsonify({
-            "success": False,
-            "error": str(e)
-        }), 500
+        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == '__main__':
+    import uvicorn
     print("Starting QuillPilot AI Backend...")
     print(f"OpenAI Available: {content_generator.openai_client is not None}")
     print(f"Ollama Available: {content_generator.ollama_available}")
-    app.run(debug=True, port=5001)
+    uvicorn.run(app, host="0.0.0.0", port=5001, reload=True)

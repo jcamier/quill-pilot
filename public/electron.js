@@ -65,7 +65,8 @@ function startPythonBackend() {
 
     console.log('Starting Python backend...');
 
-  pythonProcess = spawn('python3', [pythonPath], {
+  pythonProcess = spawn('uvicorn', ['app:app', '--host', '0.0.0.0', '--port', '5001'], {
+    cwd: path.dirname(pythonPath),
     stdio: ['pipe', 'pipe', 'pipe']
   });
 
