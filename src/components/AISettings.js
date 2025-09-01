@@ -18,6 +18,46 @@ const AISettings = ({ aiModels, aiStatus, onRefresh }) => {
   const [refreshing, setRefreshing] = useState(false);
   const [showApiKeyForm, setShowApiKeyForm] = useState(false);
   const [apiKey, setApiKey] = useState('');
+  const [selectedOllamaModel, setSelectedOllamaModel] = useState('');
+  const [selectedOpenAIModel, setSelectedOpenAIModel] = useState('');
+
+  // Load saved model preferences on component mount
+  React.useEffect(() => {
+    const ollamaModel = localStorage.getItem('preferred_ollama_model') || '';
+    const openaiModel = localStorage.getItem('preferred_openai_model') || '';
+    setSelectedOllamaModel(ollamaModel);
+    setSelectedOpenAIModel(openaiModel);
+  }, []);
+
+  // Auto-select best default models when models are loaded
+  React.useEffect(() => {
+    // Auto-select Ollama model if none selected and models available
+    if (!selectedOllamaModel && aiModels.ollama?.length > 0) {
+      const defaultModel = aiModels.ollama.find(m => m.includes('llama3')) ||
+                          aiModels.ollama.find(m => m.includes('mistral')) ||
+                          aiModels.ollama[0];
+      setSelectedOllamaModel(defaultModel);
+      localStorage.setItem('preferred_ollama_model', defaultModel);
+    }
+
+    // Auto-select OpenAI model if none selected and models available
+    if (!selectedOpenAIModel && aiModels.openai?.length > 0) {
+      const defaultModel = aiModels.openai.find(m => m.includes('gpt-3.5-turbo')) ||
+                          aiModels.openai[0];
+      setSelectedOpenAIModel(defaultModel);
+      localStorage.setItem('preferred_openai_model', defaultModel);
+    }
+  }, [aiModels, selectedOllamaModel, selectedOpenAIModel]);
+
+  const handleOllamaModelChange = (model) => {
+    setSelectedOllamaModel(model);
+    localStorage.setItem('preferred_ollama_model', model);
+  };
+
+  const handleOpenAIModelChange = (model) => {
+    setSelectedOpenAIModel(model);
+    localStorage.setItem('preferred_openai_model', model);
+  };
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -119,11 +159,87 @@ const AISettings = ({ aiModels, aiStatus, onRefresh }) => {
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div>
-              <h3 className="font-medium text-gray-900 mb-3">Status</h3>
-              <div className="space-y-2">
+              <h3 className="font-bold text-gray-900 mb-4 text-lg">Model Selection</h3>
+              {aiModels.ollama?.length > 0 ? (
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-sm font-bold text-gray-800 mb-3">
+                      Preferred Model for Content Generation
+                    </label>
+                    <select
+                      value={selectedOllamaModel}
+                      onChange={(e) => handleOllamaModelChange(e.target.value)}
+                      className="w-full input text-sm font-medium border-2 border-gray-300 bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                    >
+                      <option value="">Auto-select best model</option>
+                      {aiModels.ollama.map((model, index) => (
+                        <option key={index} value={model}>
+                          {model}
+                          {model.includes('llama3') ? ' (Recommended)' :
+                           model.includes('mistral') ? ' (Fast)' :
+                           model.includes('codellama') ? ' (Code)' : ''}
+                        </option>
+                      ))}
+                    </select>
+                    {selectedOllamaModel && (
+                      <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg">
+                        <p className="text-sm font-bold text-green-800">
+                          ✓ Currently Using: <span className="font-bold">{selectedOllamaModel}</span>
+                        </p>
+                        <p className="text-xs text-green-700 mt-1">
+                          This model will be used for all content generation
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="bg-gray-50 rounded p-3">
+                    <h4 className="text-sm font-medium text-gray-700 mb-2">Available Models ({aiModels.ollama.length})</h4>
+                    <div className="space-y-1 max-h-32 overflow-y-auto">
+                      {aiModels.ollama.map((model, index) => (
+                        <div key={index} className={`flex items-center justify-between text-xs p-2 rounded ${
+                          selectedOllamaModel === model ? 'bg-green-100 border border-green-300' : 'bg-white'
+                        }`}>
+                          <span className={`font-mono ${
+                            selectedOllamaModel === model ? 'text-green-800 font-bold' : 'text-gray-600'
+                          }`}>{model}</span>
+                          {selectedOllamaModel === model && (
+                            <span className="text-green-700 font-bold">✓ Selected</span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="bg-blue-50 rounded p-3">
+                    <h4 className="text-sm font-medium text-blue-800 mb-2">Popular Models to Try</h4>
+                    <div className="space-y-1 text-xs text-blue-700">
+                      <div>• <code className="bg-blue-100 px-1 rounded">ollama pull llama3</code> - Best overall (Recommended)</div>
+                      <div>• <code className="bg-blue-100 px-1 rounded">ollama pull mistral</code> - Fast and efficient</div>
+                      <div>• <code className="bg-blue-100 px-1 rounded">ollama pull codellama</code> - Code generation</div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-8 text-gray-500">
+                  <Server className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                  <p className="text-sm mb-2">No models found</p>
+                  {aiStatus.ollama_available && (
+                    <div className="text-xs text-gray-600">
+                      <p>Install your first model:</p>
+                      <code className="bg-gray-100 px-2 py-1 rounded">ollama pull llama3</code>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div>
+              <h3 className="font-medium text-gray-900 mb-3">Status & Information</h3>
+              <div className="space-y-3">
                 <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                   <span className="text-sm font-medium">Service Status</span>
-                  <span className={`text-sm ${
+                  <span className={`text-sm font-bold ${
                     aiStatus.ollama_available ? 'text-green-600' : 'text-red-600'
                   }`}>
                     {aiStatus.ollama_available ? 'Running' : 'Not Available'}
@@ -132,52 +248,22 @@ const AISettings = ({ aiModels, aiStatus, onRefresh }) => {
 
                 <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                   <span className="text-sm font-medium">Available Models</span>
-                  <span className="text-sm text-gray-600">
+                  <span className="text-sm text-gray-600 font-medium">
                     {aiModels.ollama?.length || 0} models
                   </span>
                 </div>
-              </div>
 
-              {!aiStatus.ollama_available && (
-                <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-                  <h4 className="font-medium text-yellow-800 mb-2">Setup Instructions</h4>
-                  <ol className="text-sm text-yellow-700 space-y-1 list-decimal list-inside">
-                    <li>Install Ollama from <a href="https://ollama.ai" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">ollama.ai</a></li>
-                    <li>Run: <code className="bg-yellow-100 px-1 rounded">ollama pull llama3</code></li>
-                    <li>Start the service: <code className="bg-yellow-100 px-1 rounded">ollama serve</code></li>
-                  </ol>
-                </div>
-              )}
-            </div>
-
-            <div>
-              <h3 className="font-medium text-gray-900 mb-3">Available Models</h3>
-              <div className="space-y-2 max-h-48 overflow-y-auto">
-                {aiModels.ollama?.length > 0 ? (
-                  aiModels.ollama.map((model, index) => (
-                    <div key={index} className="flex items-center justify-between p-2 bg-gray-50 rounded">
-                      <span className="text-sm font-mono">{model}</span>
-                      <span className="text-xs text-green-600">Available</span>
-                    </div>
-                  ))
-                ) : (
-                  <div className="text-center py-8 text-gray-500">
-                    <Server className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                    <p className="text-sm">No models found</p>
+                {!aiStatus.ollama_available && (
+                  <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                    <h4 className="font-medium text-yellow-800 mb-2">Setup Instructions</h4>
+                    <ol className="text-sm text-yellow-700 space-y-1 list-decimal list-inside">
+                      <li>Install Ollama from <a href="https://ollama.ai" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">ollama.ai</a></li>
+                      <li>Run: <code className="bg-yellow-100 px-1 rounded">ollama pull llama3</code></li>
+                      <li>Start the service: <code className="bg-yellow-100 px-1 rounded">ollama serve</code></li>
+                    </ol>
                   </div>
                 )}
               </div>
-
-              {aiStatus.ollama_available && (
-                <div className="mt-4">
-                  <h4 className="text-sm font-medium text-gray-700 mb-2">Popular Models to Try</h4>
-                  <div className="space-y-1 text-xs text-gray-600">
-                    <div>• <code>ollama pull llama2</code> - General purpose</div>
-                    <div>• <code>ollama pull codellama</code> - Code generation</div>
-                    <div>• <code>ollama pull mistral</code> - Fast and efficient</div>
-                  </div>
-                </div>
-              )}
             </div>
           </div>
         </div>
@@ -196,12 +282,71 @@ const AISettings = ({ aiModels, aiStatus, onRefresh }) => {
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div>
-              <h3 className="font-medium text-gray-900 mb-3">Configuration</h3>
+              <h3 className="font-bold text-gray-900 mb-4 text-lg">Model Selection</h3>
+              {aiStatus.openai_available && aiModels.openai?.length > 0 ? (
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-sm font-bold text-gray-800 mb-3">
+                      Preferred Model for Content Generation
+                    </label>
+                    <select
+                      value={selectedOpenAIModel}
+                      onChange={(e) => handleOpenAIModelChange(e.target.value)}
+                      className="w-full input text-sm font-medium border-2 border-gray-300 bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                    >
+                      <option value="">Auto-select best model</option>
+                      {aiModels.openai.map((model, index) => (
+                        <option key={index} value={model}>
+                          {model}
+                          {model.includes('gpt-3.5-turbo') ? ' (Fast & Affordable)' :
+                           model.includes('gpt-4') ? ' (Most Capable)' : ''}
+                        </option>
+                      ))}
+                    </select>
+                    {selectedOpenAIModel && (
+                      <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg">
+                        <p className="text-sm font-bold text-green-800">
+                          ✓ Currently Using: <span className="font-bold">{selectedOpenAIModel}</span>
+                        </p>
+                        <p className="text-xs text-green-700 mt-1">
+                          This model will be used for all content generation
+                        </p>
+                      </div>
+                    )}
+                  </div>
 
+                  <div className="bg-gray-50 rounded p-3">
+                    <h4 className="text-sm font-medium text-gray-700 mb-2">Available Models ({aiModels.openai.length})</h4>
+                    <div className="space-y-1 max-h-32 overflow-y-auto">
+                      {aiModels.openai.map((model, index) => (
+                        <div key={index} className={`flex items-center justify-between text-xs p-2 rounded ${
+                          selectedOpenAIModel === model ? 'bg-green-100 border border-green-300' : 'bg-white'
+                        }`}>
+                          <span className={`font-mono ${
+                            selectedOpenAIModel === model ? 'text-green-800 font-bold' : 'text-gray-600'
+                          }`}>{model}</span>
+                          {selectedOpenAIModel === model && (
+                            <span className="text-green-700 font-bold">✓ Selected</span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-8 text-gray-500">
+                  <Key className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                  <p className="text-sm">Configure API key to see models</p>
+                </div>
+              )}
+            </div>
+
+            <div>
+              <h3 className="font-medium text-gray-900 mb-3">Configuration & Status</h3>
               <div className="space-y-3">
                 <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                   <span className="text-sm font-medium">API Status</span>
-                  <span className={`text-sm ${
+                  <span className={`text-sm font-bold ${
                     aiStatus.openai_available ? 'text-green-600' : 'text-red-600'
                   }`}>
                     {aiStatus.openai_available ? 'Connected' : 'Not Configured'}
@@ -247,25 +392,6 @@ const AISettings = ({ aiModels, aiStatus, onRefresh }) => {
                       <p>Get your API key from <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">OpenAI Platform</a></p>
                       <p className="mt-1">⚠️ Your API key is stored locally and never shared</p>
                     </div>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div>
-              <h3 className="font-medium text-gray-900 mb-3">Available Models</h3>
-              <div className="space-y-2">
-                {aiStatus.openai_available && aiModels.openai?.length > 0 ? (
-                  aiModels.openai.map((model, index) => (
-                    <div key={index} className="flex items-center justify-between p-2 bg-gray-50 rounded">
-                      <span className="text-sm font-mono">{model}</span>
-                      <span className="text-xs text-green-600">Available</span>
-                    </div>
-                  ))
-                ) : (
-                  <div className="text-center py-8 text-gray-500">
-                    <Key className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                    <p className="text-sm">Configure API key to see models</p>
                   </div>
                 )}
               </div>

@@ -228,6 +228,7 @@ function App() {
             onSave={saveBlogPost}
             aiModels={aiModels}
             aiStatus={aiStatus}
+            onNavigateToSettings={() => setCurrentView('settings')}
           />
         )}
 

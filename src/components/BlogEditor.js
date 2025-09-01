@@ -19,8 +19,9 @@ import {
   Link
 } from 'lucide-react';
 import { aiService } from '../services/aiService';
+import { preferencesService } from '../services/preferencesService';
 
-const BlogEditor = ({ post, onSave, aiModels, aiStatus }) => {
+const BlogEditor = ({ post, onSave, aiModels, aiStatus, onNavigateToSettings }) => {
   const [currentPost, setCurrentPost] = useState(post || {
     id: Date.now().toString(),
     title: '',
@@ -35,7 +36,6 @@ const BlogEditor = ({ post, onSave, aiModels, aiStatus }) => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [aiPrompt, setAiPrompt] = useState('');
   const [selectedAiProvider, setSelectedAiProvider] = useState('ollama');
-  const [selectedModel, setSelectedModel] = useState('');
   const [generateOptions, setGenerateOptions] = useState({
     style: 'informative',
     length: 'medium',
@@ -88,6 +88,10 @@ const BlogEditor = ({ post, onSave, aiModels, aiStatus }) => {
 
     setIsGenerating(true);
     try {
+      // Get the user's preferred model for the selected provider
+      const availableModels = aiModels[selectedAiProvider] || [];
+      const selectedModel = preferencesService.getBestModelForProvider(selectedAiProvider, availableModels);
+
       let generatedContent;
 
       if (generateOptions.template === 'blog') {
@@ -231,7 +235,17 @@ const BlogEditor = ({ post, onSave, aiModels, aiStatus }) => {
         {showAIPanel && (
           <div className="w-80 border-r border-gray-200 flex flex-col bg-gray-50">
             <div className="p-4 border-b border-gray-200">
-              <h3 className="font-semibold text-gray-900 mb-4">AI Assistant</h3>
+              <h3 className="font-semibold text-gray-900 mb-1">AI Assistant</h3>
+              {(() => {
+                const availableModels = aiModels[selectedAiProvider] || [];
+                const currentModel = preferencesService.getBestModelForProvider(selectedAiProvider, availableModels);
+                return currentModel ? (
+                  <p className="text-xs text-gray-600 mb-3">
+                    Model: <span className="font-medium">{currentModel}</span>
+                    <span className="text-gray-400 ml-1">(set in Settings)</span>
+                  </p>
+                ) : null;
+              })()}
 
               {/* AI Provider Selection */}
               <div className="mb-4">
@@ -248,22 +262,41 @@ const BlogEditor = ({ post, onSave, aiModels, aiStatus }) => {
                 </select>
               </div>
 
-              {/* Model Selection */}
-              {aiModels[selectedAiProvider]?.length > 0 && (
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Model
-                  </label>
-                  <select
-                    value={selectedModel}
-                    onChange={(e) => setSelectedModel(e.target.value)}
-                    className="w-full input text-sm"
-                  >
-                    <option value="">Default</option>
-                    {aiModels[selectedAiProvider].map(model => (
-                      <option key={model} value={model}>{model}</option>
-                    ))}
-                  </select>
+              {/* Model Info - Link to Settings */}
+              {aiModels[selectedAiProvider]?.length > 0 ? (
+                <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <p className="text-sm text-blue-800 mb-1">
+                    <strong>{aiModels[selectedAiProvider].length} models available</strong>
+                  </p>
+                  <p className="text-xs text-blue-700">
+                    Change preferred model in <button
+                      onClick={onNavigateToSettings}
+                      className="text-blue-600 underline hover:text-blue-800"
+                    >
+                      AI Settings
+                    </button>
+                  </p>
+                </div>
+              ) : selectedAiProvider && (
+                <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                  <p className="text-sm text-yellow-800 mb-2">
+                    <strong>No {selectedAiProvider} models found</strong>
+                  </p>
+                  {selectedAiProvider === 'ollama' ? (
+                    <div className="text-xs text-yellow-700">
+                      <p>Install models with:</p>
+                      <code className="bg-yellow-100 px-1 rounded">ollama pull llama3</code>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-yellow-700">
+                      Check your API key in <button
+                        onClick={onNavigateToSettings}
+                        className="text-blue-600 underline hover:text-blue-800"
+                      >
+                        Settings
+                      </button>
+                    </p>
+                  )}
                 </div>
               )}
 
