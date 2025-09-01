@@ -5,6 +5,7 @@ OPENAI_API_KEY=your_openai_api_key_here
 # Make sure Ollama is installed and running: https://ollama.ai/
 # Default models: llama2, codellama, mistral, etc.
 
-# Flask Configuration
-FLASK_ENV=development
-FLASK_DEBUG=true
+# FastAPI Configuration
+# Environment variables for FastAPI/Uvicorn
+ENVIRONMENT=development
+DEBUG=true

@@ -9,8 +9,8 @@ DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 # Change to the project directory
 cd "$DIR"
 
-# Start QuillPilot using the main startup script
-./start.sh
+# Start QuillPilot in desktop mode (since this is likely what users want when double-clicking)
+./start.sh desktop
 
 # Keep terminal open if there's an error
 if [ $? -ne 0 ]; then

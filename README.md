@@ -125,30 +125,59 @@ QuillPilot is a desktop application that helps writers and content creators prod
 
 ### Starting QuillPilot
 
-**For Everyone:**
+**Easy Launch (Recommended):**
 ```bash
-# The main way to start QuillPilot
+# Interactive menu - choose web or desktop mode
 ./start.sh
 ```
 
-**Alternative Methods:**
-```bash
-# Quick start for developers
-npm run dev
+When you run `./start.sh`, you'll see a simple menu:
+```
+🚀 Choose how to run QuillPilot:
 
-# Just the desktop app (if services are running)
-npm start
+1. 🌐 Web App (for developers - opens in browser)
+2. 🖥️  Desktop App (for regular use - native app)
+3. ❌ Cancel
 
-# Individual services
-npm run dev:react    # Web interface only
-npm run dev:python   # AI backend only
+Enter your choice (1-3):
 ```
 
+**Direct Launch:**
+```bash
+./start.sh web       # Web app (opens in browser)
+./start.sh desktop   # Desktop app (native app)
+```
+
+**Double-Click Launch:**
+- **Double-click `QuillPilot.command`** → Automatically launches desktop app
+
+**For Developers:**
+```bash
+# Individual services (for development)
+npm run dev:web      # Web app + backend only
+npm run dev:desktop  # Desktop app + backend
+npm run dev:python   # Backend API only
+```
+
+### Launch Modes Explained
+
+#### 🌐 Web App Mode (`./start.sh web`)
+- **Best for**: Developers, debugging, browser DevTools
+- **Opens**: Browser tab at http://localhost:3000
+- **Includes**: React dev server + FastAPI backend
+- **Use when**: You want to inspect elements, debug, or prefer browser
+
+#### 🖥️ Desktop App Mode (`./start.sh desktop`)
+- **Best for**: Regular writing, clean interface, native feel
+- **Opens**: Native desktop application
+- **Includes**: Background React server + FastAPI backend + Electron
+- **Use when**: You want a distraction-free writing environment
+
 **What happens when you start:**
-- React development server starts (http://localhost:3000)
-- Python Flask backend starts (http://localhost:5001)
-- Electron desktop app opens automatically
+- FastAPI backend starts (http://localhost:5001) with AI endpoints
+- React development server starts (background or browser)
 - Your Ollama models are detected and ready to use
+- OpenAI integration available if API key is configured
 
 ## 🏗️ Architecture
 
@@ -163,7 +192,7 @@ QuillPilot/
 │   ├── services/
 │   │   └── aiService.js     # AI integration service
 │   └── python/             # Python backend
-│       ├── app.py          # Flask API server
+│       ├── app.py          # FastAPI server with streaming
 │       └── requirements.txt # Python dependencies
 ├── public/
 │   ├── electron.js         # Electron main process
@@ -221,7 +250,7 @@ Access AI settings through the sidebar or menu:
 ### Project Structure
 
 - **Frontend**: React with Tailwind CSS for the user interface
-- **Backend**: Python Flask API for AI integration
+- **Backend**: Python FastAPI with streaming support for AI integration
 - **Desktop**: Electron for native desktop functionality
 
 ### Adding New Features
@@ -241,10 +270,14 @@ npm run build:electron
 
 ### AI Service Endpoints
 
-- `GET /api/health` - Check service status
-- `GET /api/models` - Get available AI models
+- `GET /api/health` - Check service status and AI availability
+- `GET /api/models` - Get available AI models (OpenAI + Ollama)
 - `POST /api/generate-blog` - Generate a complete blog post
 - `POST /api/generate-content` - Generate custom content
+- `POST /api/generate-blog-stream` - Stream blog generation in real-time
+- `POST /api/generate-content-stream` - Stream content generation in real-time
+- `GET /docs` - Interactive API documentation (Swagger UI)
+- `GET /redoc` - Alternative API documentation
 
 ### Frontend Services
 
@@ -274,7 +307,7 @@ npm run build:electron
 **AI Service Not Available**
 - Ensure Ollama is running: `ollama serve`
 - Check your OpenAI API key is valid
-- Verify Python backend is running on port 5001 (not 5000 due to macOS AirPlay)
+- Verify FastAPI backend is running on port 5001 (not 5000 due to macOS AirPlay)
 
 **Electron App Won't Start**
 - Run `npm install` to ensure all dependencies are installed
@@ -285,6 +318,7 @@ npm run build:electron
 - Install Python dependencies: `pip install -r src/python/requirements.txt`
 - Check Python version is 3.8 or higher
 - Port 5000 conflict: We use port 5001 to avoid macOS AirPlay
+- Test backend directly: Visit http://localhost:5001/docs for API documentation
 
 **Port Conflicts**
 - Stop existing processes: `pkill -f "react-scripts|python3.*app.py"`

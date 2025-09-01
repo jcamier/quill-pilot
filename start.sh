@@ -2,6 +2,10 @@
 
 # QuillPilot Startup Script
 # Works for both developers and end users
+# Usage: ./start.sh [web|desktop]
+
+# Parse command line arguments
+MODE=${1:-"menu"}
 
 clear
 echo "┌─────────────────────────────────┐"
@@ -9,6 +13,23 @@ echo "│        🖋️  QuillPilot           │"
 echo "│   AI Writing Assistant         │"
 echo "└─────────────────────────────────┘"
 echo ""
+
+# Function to show usage menu
+show_menu() {
+    echo "🚀 Choose how to run QuillPilot:"
+    echo ""
+    echo "1. 🌐 Web App (for developers - opens in browser)"
+    echo "2. 🖥️  Desktop App (for regular use - native app)"
+    echo "3. ❌ Cancel"
+    echo ""
+    read -p "Enter your choice (1-3): " choice
+    case $choice in
+        1) MODE="web" ;;
+        2) MODE="desktop" ;;
+        3) echo "Cancelled."; exit 0 ;;
+        *) echo "Invalid choice. Please run again."; exit 1 ;;
+    esac
+}
 
 # Function to check if a command exists
 command_exists() {
@@ -45,7 +66,7 @@ fi
 # Check if Python dependencies are installed
 echo "📦 Checking Python dependencies..."
 cd src/python
-if ! python3 -c "import fastapi, uvicorn, ollama, requests" >/dev/null 2>&1; then
+if ! python3 -c "import fastapi, uvicorn, ollama, requests, pydantic" >/dev/null 2>&1; then
     echo "Installing Python dependencies..."
     pip install -r requirements.txt
 fi
@@ -56,7 +77,7 @@ echo "🚀 Starting QuillPilot..."
 echo ""
 echo "This will start:"
 echo "  • React development server (http://localhost:3000)"
-echo "  • Python Flask backend (http://localhost:5001)"
+echo "  • Python FastAPI backend (http://localhost:5001)"
 echo "  • Electron desktop app"
 echo ""
 
@@ -82,8 +103,36 @@ fi
 echo "  • OpenAI: Add API key in settings for cloud AI"
 echo ""
 
-echo "🎉 Ready to launch! Press Ctrl+C to stop all services"
+# Show menu if no mode specified
+if [ "$MODE" = "menu" ]; then
+    show_menu
+fi
+
+# Validate mode
+case $MODE in
+    web|desktop) ;;
+    *) echo "❌ Invalid mode: $MODE. Use: web or desktop"; exit 1 ;;
+esac
+
+echo "🎉 Ready to launch in $MODE mode! Press Ctrl+C to stop all services"
 echo ""
 
-# Start in development mode
-npm run dev
+# Start based on selected mode
+case $MODE in
+    "web")
+        echo "🌐 Starting Web App..."
+        echo "  • React development server (http://localhost:3000)"
+        echo "  • Python FastAPI backend (http://localhost:5001)"
+        echo "  • Opens in your default browser"
+        echo ""
+        npm run dev:web
+        ;;
+    "desktop")
+        echo "🖥️  Starting Desktop App..."
+        echo "  • React development server (background)"
+        echo "  • Python FastAPI backend (http://localhost:5001)"
+        echo "  • Electron desktop app"
+        echo ""
+        npm run dev:desktop
+        ;;
+esac
