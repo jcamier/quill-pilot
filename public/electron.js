@@ -1,6 +1,8 @@
 const { app, BrowserWindow, Menu, ipcMain, dialog } = require('electron');
 const path = require('path');
 const { spawn } = require('child_process');
+const os = require('os');
+const fs = require('fs');
 
 // Check if we're in development mode
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
@@ -8,6 +10,52 @@ const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
 // Keep a global reference of the window object
 let mainWindow;
 let pythonProcess;
+
+// Create the content directory on app startup
+function ensureContentDirectory() {
+  try {
+    const contentDir = path.join(os.homedir(), 'QuillPilot', 'blog-posts');
+    if (!fs.existsSync(contentDir)) {
+      fs.mkdirSync(contentDir, { recursive: true });
+      console.log('Created content directory on startup:', contentDir);
+
+      // Create a welcome README file
+      const welcomeContent = `# 📝 Welcome to QuillPilot!
+
+This folder contains all your blog posts and writing content.
+
+## What's Here
+- **Your blog posts** are automatically saved as Markdown files
+- **Each file** contains your content plus metadata (dates, SEO info, etc.)
+- **Safe storage** - your content won't be lost if you uninstall the app
+
+## File Format
+Each post is saved as: \`title_postid.md\`
+
+## How It Works
+1. **Auto-save**: Posts are saved automatically as you type
+2. **Easy access**: Use "Open Folder" in the QuillPilot dashboard
+3. **Portable**: Copy files to backup services or other computers
+4. **Editable**: Open posts in any Markdown editor
+
+## Getting Started
+Just start writing in QuillPilot! Your first post will appear here automatically.
+
+---
+*Created by QuillPilot - Your AI Writing Assistant*
+`;
+
+      const welcomePath = path.join(contentDir, 'README.md');
+      fs.writeFileSync(welcomePath, welcomeContent, 'utf8');
+      console.log('Created welcome README file:', welcomePath);
+
+    } else {
+      console.log('Content directory already exists:', contentDir);
+    }
+  } catch (error) {
+    console.error('Error creating content directory:', error);
+  }
+}
 
 function createWindow() {
   // Create the browser window
@@ -230,6 +278,155 @@ function createMenu() {
 }
 
 // IPC handlers
+ipcMain.handle('save-blog-post', async (event, post) => {
+  try {
+    // Get the content directory
+    const contentDir = path.join(os.homedir(), 'QuillPilot', 'blog-posts');
+
+    // Ensure the directory exists
+    if (!fs.existsSync(contentDir)) {
+      fs.mkdirSync(contentDir, { recursive: true });
+      console.log('Created content directory:', contentDir);
+    }
+
+    // Create a safe filename from the post title
+    const safeTitle = post.title.replace(/[^a-z0-9]/gi, '_').toLowerCase() || 'untitled';
+    const filename = `${safeTitle}_${post.id}.md`;
+    const filePath = path.join(contentDir, filename);
+
+    // Create markdown content with metadata
+    const markdownContent = `---
+title: "${post.title}"
+createdAt: "${post.createdAt}"
+updatedAt: "${post.updatedAt}"
+status: "${post.status}"
+seoKeywords: ${JSON.stringify(post.seoKeywords || [])}
+metaDescription: "${post.metaDescription || ''}"
+---
+
+${post.content || ''}
+`;
+
+    // Save the file
+    fs.writeFileSync(filePath, markdownContent, 'utf8');
+    console.log('Blog post saved successfully:', filePath);
+
+    return { success: true, filePath, filename };
+  } catch (error) {
+    console.error('Error saving blog post:', error);
+    return { success: false, message: error.message };
+  }
+});
+
+ipcMain.handle('get-content-directory', () => {
+  try {
+    // Create a dedicated content directory in the user's home directory
+    const contentDir = path.join(os.homedir(), 'QuillPilot', 'blog-posts');
+
+    // Ensure the directory exists
+    if (!fs.existsSync(contentDir)) {
+      fs.mkdirSync(contentDir, { recursive: true });
+    }
+
+    return { success: true, path: contentDir };
+  } catch (error) {
+    return { success: false, message: error.message };
+  }
+});
+
+ipcMain.handle('load-blog-posts', async () => {
+  try {
+    // Get the content directory
+    const contentDir = path.join(os.homedir(), 'QuillPilot', 'blog-posts');
+
+    // Check if directory exists
+    if (!fs.existsSync(contentDir)) {
+      return { success: true, posts: [] };
+    }
+
+    // Read all markdown files
+    const files = fs.readdirSync(contentDir).filter(file => file.endsWith('.md'));
+    const posts = [];
+
+    for (const file of files) {
+      try {
+        const filePath = path.join(contentDir, file);
+        const content = fs.readFileSync(filePath, 'utf8');
+
+        // Parse frontmatter and content
+        const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
+
+        if (frontmatterMatch) {
+          const frontmatter = frontmatterMatch[1];
+          const postContent = frontmatterMatch[2];
+
+          // Parse frontmatter (simple YAML-like parsing)
+          const metadata = {};
+          frontmatter.split('\n').forEach(line => {
+            const [key, ...valueParts] = line.split(': ');
+            if (key && valueParts.length > 0) {
+              const value = valueParts.join(': ').replace(/^"|"$/g, '');
+              try {
+                metadata[key] = JSON.parse(value);
+              } catch {
+                metadata[key] = value;
+              }
+            }
+          });
+
+          posts.push({
+            id: metadata.id || file.replace('.md', '').split('_').pop(),
+            title: metadata.title || 'Untitled',
+            content: postContent,
+            createdAt: metadata.createdAt || new Date().toISOString(),
+            updatedAt: metadata.updatedAt || new Date().toISOString(),
+            status: metadata.status || 'draft',
+            seoKeywords: metadata.seoKeywords || [],
+            metaDescription: metadata.metaDescription || '',
+            filePath: filePath
+          });
+        }
+      } catch (fileError) {
+        console.error(`Error parsing file ${file}:`, fileError);
+      }
+    }
+
+    return { success: true, posts };
+  } catch (error) {
+    return { success: false, message: error.message };
+  }
+});
+
+ipcMain.handle('open-content-directory', async () => {
+  try {
+    // Get the content directory
+    const contentDir = path.join(os.homedir(), 'QuillPilot', 'blog-posts');
+
+    // Ensure the directory exists
+    if (!fs.existsSync(contentDir)) {
+      fs.mkdirSync(contentDir, { recursive: true });
+    }
+
+    // Open the directory in the system file manager
+    const { shell } = require('electron');
+    shell.openPath(contentDir);
+
+    return { success: true };
+  } catch (error) {
+    return { success: false, message: error.message };
+  }
+});
+
+// Test handler to manually create the content directory
+ipcMain.handle('test-create-content-directory', () => {
+  try {
+    ensureContentDirectory();
+    return { success: true, message: 'Content directory created/verified' };
+  } catch (error) {
+    return { success: false, message: error.message };
+  }
+});
+
 ipcMain.handle('save-file', async (event, content, filename) => {
   try {
     const { filePath } = await dialog.showSaveDialog(mainWindow, {
@@ -243,7 +440,6 @@ ipcMain.handle('save-file', async (event, content, filename) => {
     });
 
     if (filePath) {
-      const fs = require('fs');
       fs.writeFileSync(filePath, content);
       return { success: true, filePath };
     }
@@ -265,7 +461,6 @@ ipcMain.handle('open-file', async () => {
     });
 
     if (filePaths && filePaths.length > 0) {
-      const fs = require('fs');
       const content = fs.readFileSync(filePaths[0], 'utf8');
       return { success: true, content, filePath: filePaths[0] };
     }
@@ -277,6 +472,7 @@ ipcMain.handle('open-file', async () => {
 
 // App event handlers
 app.whenReady().then(() => {
+  ensureContentDirectory(); // Create content directory on startup
   createWindow();
   createMenu();
 

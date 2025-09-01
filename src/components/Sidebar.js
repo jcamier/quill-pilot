@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   PenTool,
   FileText,
@@ -8,7 +8,8 @@ import {
   Search,
   Clock,
   Trash2,
-  Edit3
+  Edit3,
+  MoreVertical
 } from 'lucide-react';
 
 const Sidebar = ({
@@ -18,9 +19,26 @@ const Sidebar = ({
   onNewPost,
   blogPosts = [],
   onOpenPost,
+  onDeletePost,
   currentPost
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
+  const [showMenuFor, setShowMenuFor] = useState(null);
+  const menuRef = useRef(null);
+
+  // Close menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (menuRef.current && !menuRef.current.contains(event.target)) {
+        setShowMenuFor(null);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
 
   const filteredPosts = blogPosts.filter(post =>
     post.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -181,33 +199,86 @@ const Sidebar = ({
               {filteredPosts.map((post) => (
                 <div
                   key={post.id}
-                  onClick={() => onOpenPost(post)}
-                  className={`p-3 rounded-lg border cursor-pointer transition-all hover:shadow-sm ${
+                  className={`p-3 rounded-lg border transition-all hover:shadow-sm ${
                     currentPost && currentPost.id === post.id
                       ? 'border-blue-200 bg-blue-50'
                       : 'border-gray-200 hover:border-gray-300'
                   }`}
                 >
                   <div className="flex items-start justify-between mb-2">
-                    <h3 className="font-medium text-gray-900 text-sm line-clamp-1">
-                      {post.title || 'Untitled'}
-                    </h3>
-                    <span className={`inline-block w-2 h-2 rounded-full ml-2 mt-1 ${
-                      post.status === 'published' ? 'bg-green-400' : 'bg-yellow-400'
-                    }`}></span>
-                  </div>
-
-                  <p className="text-xs text-gray-600 mb-2 line-clamp-2">
-                    {truncateContent(post.content.replace(/[#*`]/g, ''))}
-                  </p>
-
-                  <div className="flex items-center justify-between text-xs text-gray-400">
-                    <div className="flex items-center gap-1">
-                      <Clock className="w-3 h-3" />
-                      {formatDate(post.updatedAt || post.createdAt)}
+                    <div
+                      className="flex-1 cursor-pointer"
+                      onClick={() => onOpenPost(post)}
+                    >
+                      <h3 className="font-medium text-gray-900 text-sm line-clamp-1">
+                        {post.title || 'Untitled'}
+                      </h3>
                     </div>
                     <div className="flex items-center gap-1">
-                      <span>{Math.ceil(post.content.split(' ').length / 200)} min read</span>
+                      <span className={`inline-block w-2 h-2 rounded-full ${
+                        post.status === 'published' ? 'bg-green-400' : 'bg-yellow-400'
+                      }`}></span>
+
+                      {/* Post Actions Menu */}
+                      <div className="relative" ref={menuRef}>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setShowMenuFor(showMenuFor === post.id ? null : post.id);
+                          }}
+                          className="p-1 text-gray-400 hover:text-gray-600 rounded transition-colors"
+                        >
+                          <MoreVertical className="w-4 h-4" />
+                        </button>
+
+                        {showMenuFor === post.id && (
+                          <div className="absolute right-0 top-6 w-32 bg-white border border-gray-200 rounded-lg shadow-lg z-10">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onOpenPost(post);
+                                setShowMenuFor(null);
+                              }}
+                              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-t-lg"
+                            >
+                              <Edit3 className="w-4 h-4" />
+                              Edit
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (window.confirm('Are you sure you want to delete this post? This action cannot be undone.')) {
+                                  onDeletePost(post.id);
+                                  setShowMenuFor(null);
+                                }
+                              }}
+                              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-b-lg border-t border-gray-100"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                              Delete
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div
+                    className="cursor-pointer"
+                    onClick={() => onOpenPost(post)}
+                  >
+                    <p className="text-xs text-gray-600 mb-2 line-clamp-2">
+                      {truncateContent(post.content.replace(/[#*`]/g, ''))}
+                    </p>
+
+                    <div className="flex items-center justify-between text-xs text-gray-400">
+                      <div className="flex items-center gap-1">
+                        <Clock className="w-3 h-3" />
+                        {formatDate(post.updatedAt || post.createdAt)}
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <span>{Math.ceil(post.content.split(' ').length / 200)} min read</span>
+                      </div>
                     </div>
                   </div>
                 </div>

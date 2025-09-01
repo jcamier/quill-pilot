@@ -7,6 +7,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   saveFile: (content, filename) => ipcRenderer.invoke('save-file', content, filename),
   openFile: () => ipcRenderer.invoke('open-file'),
 
+  // Blog post file operations
+  getContentDirectory: () => ipcRenderer.invoke('get-content-directory'),
+  saveBlogPost: (post) => ipcRenderer.invoke('save-blog-post', post),
+  loadBlogPosts: () => ipcRenderer.invoke('load-blog-posts'),
+  openContentDirectory: () => ipcRenderer.invoke('open-content-directory'),
+  testCreateContentDirectory: () => ipcRenderer.invoke('test-create-content-directory'),
+
   // Menu event listeners
   onMenuEvent: (callback) => {
     ipcRenderer.on('menu-new-blog-post', callback);

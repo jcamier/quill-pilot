@@ -81,6 +81,57 @@ const Dashboard = ({
           </div>
         )}
 
+        {/* Content Directory Info */}
+        {window.electronAPI && (
+          <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                <div>
+                  <h3 className="font-medium text-blue-800">Your Content is Safe</h3>
+                  <p className="text-sm text-blue-700">
+                    Blog posts are automatically saved to your computer and won't be lost.
+                  </p>
+                  <p className="text-xs text-blue-600 mt-1">
+                    📁 Folder: ~/QuillPilot/blog-posts/
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={async () => {
+                  try {
+                    await window.electronAPI.openContentDirectory();
+                  } catch (error) {
+                    console.error('Error opening content directory:', error);
+                  }
+                }}
+                className="px-3 py-1 text-sm bg-blue-100 text-blue-700 rounded-md hover:bg-blue-200 transition-colors"
+              >
+                Open Folder
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Web Mode Content Directory Info */}
+        {!window.electronAPI && (
+          <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+            <div className="flex items-center gap-3">
+              <div className="w-2 h-2 bg-amber-500 rounded-full"></div>
+              <div>
+                <h3 className="font-medium text-amber-800">Web Mode - Content Storage</h3>
+                <p className="text-sm text-amber-700">
+                  In web mode, your posts are saved to localStorage. For persistent file storage,
+                  use the desktop app which creates a dedicated folder on your computer.
+                </p>
+                <p className="text-xs text-amber-600 mt-1">
+                  💡 Tip: Use "Export" to save posts as files, or switch to desktop mode for automatic file storage.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Quick Actions */}
         <div className="mb-8">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h2>

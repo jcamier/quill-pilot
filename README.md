@@ -14,6 +14,25 @@ QuillPilot is a desktop application that helps writers and content creators prod
 
 *For detailed setup instructions, see the [Setup Guide](#setup-guide) below.*
 
+## 📁 Where Your Content is Stored
+
+**Your blog posts are automatically saved and safe!**
+
+- **Location**: `~/QuillPilot/blog-posts/` (in your home directory)
+- **Format**: Each post is saved as a Markdown file with metadata
+- **Backup**: Your content is stored on your computer, not in the cloud
+- **Access**: Click "Open Folder" in the dashboard to view your files
+- **Sync**: Files are automatically saved as you type
+
+**Why this matters:**
+- ✅ Your content won't be lost if you uninstall the app
+- ✅ You can edit posts in any Markdown editor
+- ✅ Easy to backup or move to another computer
+- ✅ No internet required to access your content
+- ✅ Your content stays private on your device
+
+**For Developers**: The `blog-posts/` directory is excluded from Git (see `.gitignore`) to prevent user content from being accidentally committed to the repository. This keeps your personal writing separate from the application code.
+
 ## ✨ Features
 
 - **AI-Powered Content Generation**: Generate blog posts, improve writing, and get content ideas

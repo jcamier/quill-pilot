@@ -130,6 +130,151 @@ class AIService {
     }
   }
 
+  async generateContentStream(options, onChunk, onComplete, onError) {
+    const {
+      prompt,
+      aiProvider = 'ollama',
+      model = null,
+      maxTokens = 1000
+    } = options;
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/generate-content-stream`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          prompt,
+          ai_provider: aiProvider,
+          model,
+          max_tokens: maxTokens
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+
+          if (done) break;
+
+          const chunk = decoder.decode(value);
+          const lines = chunk.split('\n');
+
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              try {
+                const data = JSON.parse(line.slice(6));
+
+                if (data.error) {
+                  onError(data.error);
+                  return;
+                }
+
+                if (data.done) {
+                  onComplete();
+                  return;
+                }
+
+                if (data.content) {
+                  onChunk(data.content);
+                }
+              } catch (parseError) {
+                console.warn('Failed to parse streaming chunk:', parseError);
+              }
+            }
+          }
+        }
+      } finally {
+        reader.releaseLock();
+      }
+    } catch (error) {
+      console.error('Streaming content generation failed:', error.message);
+      onError(error.message);
+    }
+  }
+
+  async generateBlogPostStream(options, onChunk, onComplete, onError) {
+    const {
+      topic,
+      style = 'informative',
+      length = 'medium',
+      aiProvider = 'ollama',
+      model = null
+    } = options;
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/generate-blog-stream`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          topic,
+          style,
+          length,
+          ai_provider: aiProvider,
+          model
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+
+          if (done) break;
+
+          const chunk = decoder.decode(value);
+          const lines = chunk.split('\n');
+
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              try {
+                const data = JSON.parse(line.slice(6));
+
+                if (data.error) {
+                  onError(data.error);
+                  return;
+                }
+
+                if (data.done) {
+                  onComplete();
+                  return;
+                }
+
+                if (data.content) {
+                  onChunk(data.content);
+                }
+              } catch (parseError) {
+                console.warn('Failed to parse streaming chunk:', parseError);
+              }
+            }
+          }
+        }
+      } finally {
+        reader.releaseLock();
+        onComplete();
+      }
+    } catch (error) {
+      console.error('Streaming blog generation failed:', error.message);
+      onError(error.message);
+    }
+  }
+
   // Predefined blog post templates
   getBlogTemplates() {
     return [

@@ -16,12 +16,13 @@ import {
   Bold,
   Italic,
   List,
-  Link
+  Link,
+  Trash2
 } from 'lucide-react';
 import { aiService } from '../services/aiService';
 import { preferencesService } from '../services/preferencesService';
 
-const BlogEditor = ({ post, onSave, aiModels, aiStatus, onNavigateToSettings }) => {
+const BlogEditor = ({ post, onSave, onDelete, aiModels, aiStatus, onNavigateToSettings }) => {
   const [currentPost, setCurrentPost] = useState(post || {
     id: Date.now().toString(),
     title: '',
@@ -34,6 +35,8 @@ const BlogEditor = ({ post, onSave, aiModels, aiStatus, onNavigateToSettings }) 
   const [showPreview, setShowPreview] = useState(false);
   const [showAIPanel, setShowAIPanel] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [streamingContent, setStreamingContent] = useState('');
   const [aiPrompt, setAiPrompt] = useState('');
   const [selectedAiProvider, setSelectedAiProvider] = useState('ollama');
   const [generateOptions, setGenerateOptions] = useState({
@@ -44,6 +47,7 @@ const BlogEditor = ({ post, onSave, aiModels, aiStatus, onNavigateToSettings }) 
 
   const contentRef = useRef(null);
   const previewRef = useRef(null);
+  const streamingContentRef = useRef('');
 
   useEffect(() => {
     if (post) {
@@ -83,56 +87,169 @@ const BlogEditor = ({ post, onSave, aiModels, aiStatus, onNavigateToSettings }) 
     onSave(currentPost);
   };
 
+  const handleDelete = () => {
+    if (currentPost && currentPost.id && window.confirm('Are you sure you want to delete this blog post? This action cannot be undone.')) {
+      onDelete(currentPost.id);
+    }
+  };
+
   const handleAIGenerate = async () => {
     if (!aiPrompt.trim()) return;
 
+    console.log('Starting AI generation...', {
+      prompt: aiPrompt,
+      selectedProvider: selectedAiProvider,
+      aiStatus: aiStatus
+    });
+
+    // Declare variables at function scope so they're accessible in catch block
+    let currentProvider = selectedAiProvider;
+    let selectedModel = null;
+
     setIsGenerating(true);
     try {
-      // Get the user's preferred model for the selected provider
-      const availableModels = aiModels[selectedAiProvider] || [];
-      const selectedModel = preferencesService.getBestModelForProvider(selectedAiProvider, availableModels);
+      // Determine which AI provider to use based on availability and user preference
+      if (!aiStatus[currentProvider + '_available']) {
+        currentProvider = aiStatus.ollama_available ? 'ollama' : aiStatus.openai_available ? 'openai' : null;
+      }
 
-      let generatedContent;
+      if (!currentProvider) {
+        throw new Error('No AI providers are available. Please configure Ollama or OpenAI in Settings.');
+      }
+
+      // Get the user's preferred model for the selected provider
+      const availableModels = aiModels[currentProvider] || [];
+      selectedModel = preferencesService.getBestModelForProvider(currentProvider, availableModels);
+
+      console.log('AI generation details:', {
+        currentProvider,
+        selectedModel,
+        availableModels: availableModels.length,
+        generateOptions
+      });
+
+      // Start streaming generation
+      setIsStreaming(true);
+      setStreamingContent('');
+      streamingContentRef.current = '';
 
       if (generateOptions.template === 'blog') {
-        // Generate full blog post
-        const blogPost = await aiService.generateBlogPost({
+        // Generate full blog post with streaming
+        await aiService.generateBlogPostStream({
           topic: aiPrompt,
           style: generateOptions.style,
           length: generateOptions.length,
-          aiProvider: selectedAiProvider,
+          aiProvider: currentProvider,
           model: selectedModel
-        });
+        },
+        // onChunk callback
+        (chunk) => {
+          streamingContentRef.current += chunk;
+          setStreamingContent(streamingContentRef.current);
+        },
+        // onComplete callback
+        () => {
+          const finalContent = streamingContentRef.current;
+          console.log('Blog generation completed, final content:', finalContent);
 
-        updatePost({
-          title: blogPost.title || aiPrompt,
-          content: blogPost.content || blogPost.introduction + '\n\n' + blogPost.content + '\n\n' + blogPost.conclusion,
-          seoKeywords: blogPost.seo_keywords || [],
-          metaDescription: blogPost.meta_description || ''
-        });
+          // Parse the streaming content as JSON for blog posts
+          try {
+            const blogData = JSON.parse(finalContent);
+            updatePost({
+              title: blogData.title || aiPrompt,
+              content: blogData.content || blogData.introduction + '\n\n' + blogData.content + '\n\n' + blogData.conclusion,
+              seoKeywords: blogData.seo_keywords || [],
+              metaDescription: blogData.meta_description || ''
+            });
+          } catch (parseError) {
+            console.log('JSON parsing failed, using raw content:', parseError);
+            // If JSON parsing fails, use the raw content
+            updatePost({
+              title: aiPrompt,
+              content: finalContent,
+              seoKeywords: aiService.generateSEOKeywords(aiPrompt, finalContent),
+              metaDescription: aiService.generateMetaDescription(aiPrompt, finalContent)
+            });
+          }
+          setIsStreaming(false);
+          setStreamingContent('');
+          streamingContentRef.current = '';
+          setAiPrompt('');
+        },
+        // onError callback
+        (error) => {
+          console.error('Streaming blog generation failed:', error);
+          setIsStreaming(false);
+          setStreamingContent('');
+          streamingContentRef.current = '';
+          throw new Error(`Blog generation failed: ${error}`);
+        }
+        );
       } else {
-        // Generate custom content
-        generatedContent = await aiService.generateContent({
+        // Generate custom content with streaming
+        await aiService.generateContentStream({
           prompt: aiPrompt,
-          aiProvider: selectedAiProvider,
+          aiProvider: currentProvider,
           model: selectedModel,
           maxTokens: generateOptions.length === 'short' ? 500 : generateOptions.length === 'medium' ? 1000 : 2000
-        });
+        },
+        // onChunk callback
+        (chunk) => {
+          streamingContentRef.current += chunk;
+          setStreamingContent(streamingContentRef.current);
+        },
+        // onComplete callback
+        () => {
+          const finalContent = streamingContentRef.current;
+          console.log('Content generation completed, final content length:', finalContent.length);
 
-        const newContent = currentPost.content + (currentPost.content ? '\n\n' : '') + generatedContent;
-        updatePost({
-          content: newContent,
-          seoKeywords: aiService.generateSEOKeywords(currentPost.title, newContent),
-          metaDescription: aiService.generateMetaDescription(currentPost.title, newContent)
-        });
+          const newContent = currentPost.content + (currentPost.content ? '\n\n' : '') + finalContent;
+          updatePost({
+            content: newContent,
+            seoKeywords: aiService.generateSEOKeywords(currentPost.title, newContent),
+            metaDescription: aiService.generateMetaDescription(currentPost.title, newContent)
+          });
+          setIsStreaming(false);
+          setStreamingContent('');
+          streamingContentRef.current = '';
+          setAiPrompt('');
+        },
+        // onError callback
+        (error) => {
+          console.error('Streaming content generation failed:', error);
+          setIsStreaming(false);
+          setStreamingContent('');
+          streamingContentRef.current = '';
+          throw new Error(`Content generation failed: ${error}`);
+        }
+        );
       }
-
-      setAiPrompt('');
     } catch (error) {
       console.error('AI generation failed:', error);
-      alert(`AI generation failed: ${error.message}`);
+      console.error('Error details:', {
+        provider: currentProvider,
+        model: selectedModel,
+        prompt: aiPrompt,
+        options: generateOptions
+      });
+
+      let errorMessage = 'AI generation failed';
+      if (error.message.includes('AI service is not running')) {
+        errorMessage = 'AI service is not running. Please check if Ollama is running or OpenAI is configured.';
+      } else if (error.message.includes('timeout')) {
+        errorMessage = 'AI generation timed out. Try a shorter prompt or check your connection.';
+      } else if (error.message.includes('No AI providers')) {
+        errorMessage = 'No AI providers available. Please configure Ollama or OpenAI in Settings.';
+      } else {
+        errorMessage = `AI generation failed: ${error.message}`;
+      }
+
+      alert(errorMessage);
     } finally {
       setIsGenerating(false);
+      setIsStreaming(false);
+      setStreamingContent('');
+      streamingContentRef.current = '';
     }
   };
 
@@ -227,6 +344,14 @@ const BlogEditor = ({ post, onSave, aiModels, aiStatus, onNavigateToSettings }) 
             <Save className="w-4 h-4" />
             Save
           </button>
+
+          <button
+            onClick={handleDelete}
+            className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors border border-red-200 hover:border-red-300"
+            title="Delete Post"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
         </div>
       </div>
 
@@ -234,143 +359,138 @@ const BlogEditor = ({ post, onSave, aiModels, aiStatus, onNavigateToSettings }) 
         {/* AI Panel */}
         {showAIPanel && (
           <div className="w-80 border-r border-gray-200 flex flex-col bg-gray-50">
+            {/* AI Panel Header */}
             <div className="p-4 border-b border-gray-200">
-              <h3 className="font-semibold text-gray-900 mb-1">AI Assistant</h3>
+              <h3 className="font-semibold text-gray-900 mb-2">AI Assistant</h3>
+
+              {/* Show current AI provider and model */}
               {(() => {
-                const availableModels = aiModels[selectedAiProvider] || [];
-                const currentModel = preferencesService.getBestModelForProvider(selectedAiProvider, availableModels);
-                return currentModel ? (
-                  <p className="text-xs text-gray-600 mb-3">
-                    Model: <span className="font-medium">{currentModel}</span>
-                    <span className="text-gray-400 ml-1">(set in Settings)</span>
-                  </p>
-                ) : null;
-              })()}
+                // Determine which AI provider to use based on availability and user preference
+                let currentProvider = selectedAiProvider;
+                if (!aiStatus[currentProvider + '_available']) {
+                  currentProvider = aiStatus.ollama_available ? 'ollama' : aiStatus.openai_available ? 'openai' : null;
+                }
 
-              {/* AI Provider Selection */}
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  AI Provider
-                </label>
-                <select
-                  value={selectedAiProvider}
-                  onChange={(e) => setSelectedAiProvider(e.target.value)}
-                  className="w-full input text-sm"
-                >
-                  {aiStatus.ollama_available && <option value="ollama">Ollama (Local)</option>}
-                  {aiStatus.openai_available && <option value="openai">OpenAI</option>}
-                </select>
-              </div>
+                if (currentProvider) {
+                  const availableModels = aiModels[currentProvider] || [];
+                  const currentModel = preferencesService.getBestModelForProvider(currentProvider, availableModels);
 
-              {/* Model Info - Link to Settings */}
-              {aiModels[selectedAiProvider]?.length > 0 ? (
-                <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                  <p className="text-sm text-blue-800 mb-1">
-                    <strong>{aiModels[selectedAiProvider].length} models available</strong>
-                  </p>
-                  <p className="text-xs text-blue-700">
-                    Change preferred model in <button
-                      onClick={onNavigateToSettings}
-                      className="text-blue-600 underline hover:text-blue-800"
-                    >
-                      AI Settings
-                    </button>
-                  </p>
-                </div>
-              ) : selectedAiProvider && (
-                <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                  <p className="text-sm text-yellow-800 mb-2">
-                    <strong>No {selectedAiProvider} models found</strong>
-                  </p>
-                  {selectedAiProvider === 'ollama' ? (
-                    <div className="text-xs text-yellow-700">
-                      <p>Install models with:</p>
-                      <code className="bg-yellow-100 px-1 rounded">ollama pull llama3</code>
+                  return (
+                    <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+                      <div className="flex items-center gap-2 mb-1">
+                        <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                        <span className="text-sm font-medium text-green-800">
+                          {currentProvider === 'ollama' ? 'Ollama (Local)' : 'OpenAI (Cloud)'}
+                        </span>
+                      </div>
+                      {currentModel && (
+                        <p className="text-xs text-green-700">
+                          Using: <span className="font-medium">{currentModel}</span>
+                        </p>
+                      )}
+                      <p className="text-xs text-green-600 mt-1">
+                        Change in{' '}
+                        <button
+                          onClick={onNavigateToSettings}
+                          className="text-green-700 underline hover:text-green-800 font-medium"
+                        >
+                          AI Settings ⚙️
+                        </button>
+                      </p>
                     </div>
-                  ) : (
-                    <p className="text-xs text-yellow-700">
-                      Check your API key in <button
-                        onClick={onNavigateToSettings}
-                        className="text-blue-600 underline hover:text-blue-800"
-                      >
-                        Settings
-                      </button>
-                    </p>
-                  )}
-                </div>
-              )}
-
-              {/* Generation Options */}
-              <div className="space-y-3 mb-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Style
-                  </label>
-                  <select
-                    value={generateOptions.style}
-                    onChange={(e) => setGenerateOptions(prev => ({ ...prev, style: e.target.value }))}
-                    className="w-full input text-sm"
-                  >
-                    <option value="informative">Informative</option>
-                    <option value="persuasive">Persuasive</option>
-                    <option value="engaging">Engaging</option>
-                    <option value="technical">Technical</option>
-                    <option value="casual">Casual</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Length
-                  </label>
-                  <select
-                    value={generateOptions.length}
-                    onChange={(e) => setGenerateOptions(prev => ({ ...prev, length: e.target.value }))}
-                    className="w-full input text-sm"
-                  >
-                    <option value="short">Short (300-500 words)</option>
-                    <option value="medium">Medium (800-1200 words)</option>
-                    <option value="long">Long (1500-2000 words)</option>
-                  </select>
-                </div>
-              </div>
+                  );
+                } else {
+                  return (
+                    <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                      <p className="text-sm text-yellow-800 font-medium mb-1">No AI providers configured</p>
+                      <p className="text-xs text-yellow-700">
+                        Configure in{' '}
+                        <button
+                          onClick={onNavigateToSettings}
+                          className="text-yellow-800 underline hover:text-yellow-900 font-medium"
+                        >
+                          AI Settings ⚙️
+                        </button>
+                      </p>
+                    </div>
+                  );
+                }
+              })()}
             </div>
 
-            {/* Templates */}
+            {/* Generation Options */}
             <div className="p-4 border-b border-gray-200">
-              <h4 className="font-medium text-gray-900 mb-2">Templates</h4>
-              <div className="space-y-2">
-                {aiService.getBlogTemplates().slice(0, 4).map(template => (
-                  <button
-                    key={template.id}
-                    onClick={() => handleTemplateSelect(template.id)}
-                    className="w-full text-left p-2 text-sm rounded-lg hover:bg-gray-100 transition-colors"
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Generation Type
+                  </label>
+                  <select
+                    value={generateOptions.template}
+                    onChange={(e) => setGenerateOptions(prev => ({ ...prev, template: e.target.value }))}
+                    className="w-full input text-sm"
                   >
-                    <div className="font-medium text-gray-900">{template.name}</div>
-                    <div className="text-gray-500 text-xs">{template.description}</div>
-                  </button>
-                ))}
+                    <option value="">Custom Content (append)</option>
+                    <option value="blog">Full Blog Post (replace)</option>
+                  </select>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Style
+                    </label>
+                    <select
+                      value={generateOptions.style}
+                      onChange={(e) => setGenerateOptions(prev => ({ ...prev, style: e.target.value }))}
+                      className="w-full input text-sm"
+                    >
+                      <option value="informative">Informative</option>
+                      <option value="conversational">Conversational</option>
+                      <option value="persuasive">Persuasive</option>
+                      <option value="technical">Technical</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Length
+                    </label>
+                    <select
+                      value={generateOptions.length}
+                      onChange={(e) => setGenerateOptions(prev => ({ ...prev, length: e.target.value }))}
+                      className="w-full input text-sm"
+                    >
+                      <option value="short">Short</option>
+                      <option value="medium">Medium</option>
+                      <option value="long">Long</option>
+                    </select>
+                  </div>
+                </div>
               </div>
             </div>
 
-            {/* AI Prompt */}
+            {/* AI Chat Interface */}
             <div className="flex-1 p-4">
               <h4 className="font-medium text-gray-900 mb-2">Generate Content</h4>
+              <p className="text-xs text-gray-600 mb-3">
+                Describe what you want to write. Be specific for better results.
+              </p>
               <textarea
                 value={aiPrompt}
                 onChange={(e) => setAiPrompt(e.target.value)}
-                placeholder="Describe what you want to write about..."
-                className="w-full h-24 textarea text-sm mb-3"
+                placeholder="Example: 'Write an introduction about the benefits of remote work' or 'Add 5 tips for better productivity'"
+                className="w-full h-32 textarea text-sm mb-3 resize-none"
               />
               <button
                 onClick={handleAIGenerate}
-                disabled={!aiPrompt.trim() || isGenerating}
+                disabled={!aiPrompt.trim() || isGenerating || isStreaming || (!aiStatus.ollama_available && !aiStatus.openai_available)}
                 className="w-full btn-primary text-sm flex items-center justify-center gap-2"
               >
-                {isGenerating ? (
+                {isGenerating || isStreaming ? (
                   <>
                     <RefreshCw className="w-4 h-4 animate-spin" />
-                    Generating...
+                    {isStreaming ? 'AI Writing...' : 'Generating...'}
                   </>
                 ) : (
                   <>
@@ -383,18 +503,31 @@ const BlogEditor = ({ post, onSave, aiModels, aiStatus, onNavigateToSettings }) 
           </div>
         )}
 
-        {/* Main Content Area */}
-        <div className="flex-1 flex flex-col">
-          {/* Title */}
-          <div className="p-4 border-b border-gray-200">
-            <input
-              type="text"
-              value={currentPost.title}
-              onChange={handleTitleChange}
-              placeholder="Enter your blog post title..."
-              className="w-full text-2xl font-bold border-none outline-none placeholder-gray-400"
-            />
-          </div>
+                  {/* Main Content Area */}
+          <div className="flex-1 flex flex-col">
+            {/* Title */}
+            <div className="p-4 border-b border-gray-200">
+              <input
+                type="text"
+                value={currentPost.title}
+                onChange={handleTitleChange}
+                placeholder="Enter your blog post title..."
+                className="w-full text-2xl font-bold border-none outline-none placeholder-gray-400"
+              />
+            </div>
+
+            {/* Streaming Content Indicator */}
+            {isStreaming && (
+              <div className="p-4 border-b border-blue-200 bg-blue-50">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+                  <span className="text-sm font-medium text-blue-700">AI is writing...</span>
+                </div>
+                <div className="text-sm text-blue-600 bg-white p-3 rounded border border-blue-200 max-h-32 overflow-y-auto">
+                  {streamingContent || 'Starting generation...'}
+                </div>
+              </div>
+            )}
 
           {/* Toolbar */}
           <div className="flex items-center gap-1 p-2 border-b border-gray-200 bg-gray-50">

@@ -15,6 +15,29 @@ function App() {
   const [blogPosts, setBlogPosts] = useState([]);
   const [currentPost, setCurrentPost] = useState(null);
 
+  // Create content directory for both web and desktop modes
+  const ensureContentDirectory = async () => {
+    try {
+      // Try to create directory using Electron if available
+      if (window.electronAPI) {
+        try {
+          const result = await window.electronAPI.getContentDirectory();
+          if (result.success) {
+            console.log('Content directory ready:', result.path);
+          }
+        } catch (error) {
+          console.log('Electron directory creation failed, using web mode');
+        }
+      }
+
+      // For web mode, we'll create the directory when first post is saved
+      // This ensures the system works regardless of launch mode
+      console.log('Content directory will be created when first post is saved');
+    } catch (error) {
+      console.error('Error ensuring content directory:', error);
+    }
+  };
+
   useEffect(() => {
     initializeApp();
     setupElectronMenuListeners();
@@ -29,24 +52,59 @@ function App() {
 
   const initializeApp = async () => {
     try {
-      // Check AI service health
-      const health = await aiService.checkHealth();
-      setAiStatus(health);
+      setLoading(true);
 
-      // Get available AI models
-      const models = await aiService.getAvailableModels();
-      setAiModels(models);
+      // Ensure content directory is ready (works for both web and desktop)
+      await ensureContentDirectory();
 
-      // Load saved blog posts from localStorage
-      const savedPosts = localStorage.getItem('quillpilot-posts');
-      if (savedPosts) {
-        setBlogPosts(JSON.parse(savedPosts));
+      // Load blog posts from file system if available
+      if (window.electronAPI) {
+        try {
+          const result = await window.electronAPI.loadBlogPosts();
+          if (result.success) {
+            setBlogPosts(result.posts);
+            console.log(`Loaded ${result.posts.length} blog posts from file system`);
+          }
+        } catch (error) {
+          console.log('No file-based posts found, starting with empty state');
+        }
       }
 
-      setLoading(false);
+      // Initialize AI services
+      await initializeAIServices();
+
+      // Load preferences from localStorage as fallback if no file-based posts
+      if (blogPosts.length === 0) {
+        const savedPosts = localStorage.getItem('quillpilot-posts');
+        if (savedPosts) {
+          try {
+            const parsedPosts = JSON.parse(savedPosts);
+            setBlogPosts(parsedPosts);
+            console.log('Loaded posts from localStorage as fallback');
+          } catch (error) {
+            console.error('Error parsing localStorage posts:', error);
+          }
+        }
+      }
+
     } catch (error) {
-      console.error('Failed to initialize app:', error);
+      console.error('Error initializing app:', error);
+    } finally {
       setLoading(false);
+    }
+  };
+
+  const initializeAIServices = async () => {
+    try {
+      // Check AI service health
+      const status = await aiService.checkHealth();
+      setAiStatus(status);
+
+      // Get available models
+      const models = await aiService.getAvailableModels();
+      setAiModels(models);
+    } catch (error) {
+      console.error('Failed to initialize AI services:', error);
     }
   };
 
@@ -156,7 +214,7 @@ function App() {
       .replace(/\n/gim, '<br>');
   };
 
-  const saveBlogPost = (post) => {
+  const saveBlogPost = async (post) => {
     let updatedPosts = [...blogPosts];
     const existingIndex = updatedPosts.findIndex(p => p.id === post.id);
 
@@ -167,6 +225,26 @@ function App() {
     }
 
     setBlogPosts(updatedPosts);
+
+    // Save to file system if available
+    if (window.electronAPI) {
+      try {
+        const result = await window.electronAPI.saveBlogPost(post);
+        if (result.success) {
+          console.log('Blog post saved to file system:', result.filePath);
+        } else {
+          console.error('Failed to save to file system:', result.message);
+          // Fallback to localStorage only
+          console.log('Using localStorage fallback for this post');
+        }
+      } catch (error) {
+        console.error('Error saving to file system:', error);
+        // Fallback to localStorage only
+        console.log('Using localStorage fallback for this post');
+      }
+    }
+
+    // Keep localStorage as fallback
     localStorage.setItem('quillpilot-posts', JSON.stringify(updatedPosts));
     setCurrentPost(post);
   };
@@ -208,6 +286,7 @@ function App() {
         onNewPost={handleNewBlogPost}
         blogPosts={blogPosts}
         onOpenPost={openBlogPost}
+        onDeletePost={deleteBlogPost}
         currentPost={currentPost}
       />
 
@@ -226,6 +305,7 @@ function App() {
           <BlogEditor
             post={currentPost}
             onSave={saveBlogPost}
+            onDelete={deleteBlogPost}
             aiModels={aiModels}
             aiStatus={aiStatus}
             onNavigateToSettings={() => setCurrentView('settings')}
