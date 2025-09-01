@@ -278,7 +278,12 @@ ipcMain.handle('open-file', async () => {
 app.whenReady().then(() => {
   createWindow();
   createMenu();
-  startPythonBackend();
+
+  // Only start Python backend if not in development mode
+  // In dev mode, the backend is started by npm run dev:python
+  if (!isDev) {
+    startPythonBackend();
+  }
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -288,14 +293,20 @@ app.whenReady().then(() => {
 });
 
 app.on('window-all-closed', () => {
-  stopPythonBackend();
+  // Only stop Python backend if we started it (i.e., not in dev mode)
+  if (!isDev) {
+    stopPythonBackend();
+  }
   if (process.platform !== 'darwin') {
     app.quit();
   }
 });
 
 app.on('before-quit', () => {
-  stopPythonBackend();
+  // Only stop Python backend if we started it (i.e., not in dev mode)
+  if (!isDev) {
+    stopPythonBackend();
+  }
 });
 
 // Handle certificate errors in development
