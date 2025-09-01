@@ -35,12 +35,12 @@ QuillPilot is a desktop application that helps writers and content creators prod
    - Use templates (How-to guides, Lists, Reviews, etc.)
 
 ### Using AI Features
-1. **Click the magic wand icon** (🪄) to open AI Assistant
-2. **Choose your AI**:
+1. **Configure your AI models** in Settings (⚙️) - choose your preferred models for each provider
+2. **Click the magic wand icon** (🪄) to open AI Assistant
+3. **Choose your AI provider**:
    - **Ollama (Local)** - Free, private, runs on your computer
    - **OpenAI** - Requires API key, very powerful
-3. **Pick a model** (like llama3 for local AI)
-4. **Type what you want** and click Generate!
+4. **Type what you want** and click Generate! (Uses your preferred model automatically)
 
 ### AI Writing Templates
 - **How-To Guide** - Step-by-step instructions
@@ -122,6 +122,25 @@ QuillPilot is a desktop application that helps writers and content creators prod
 1. **Get an API key**: Visit [OpenAI Platform](https://platform.openai.com/api-keys)
 
 2. **Add your API key**: Use the AI Settings panel in the app or add it to your `.env` file
+
+### Configuring AI Model Preferences
+
+Once you have your AI providers set up, configure your preferred models:
+
+1. **Open AI Settings**: Click the ⚙️ Settings icon in the sidebar
+2. **Select Models**: In the "Model Selection" section (left side), choose your preferred model for each provider:
+   - **Ollama**: Select from your installed models (llama3 recommended)
+   - **OpenAI**: Choose from available models (gpt-3.5-turbo for speed/cost, gpt-4 for quality)
+3. **Auto-Selection**: Leave dropdown on "Auto-select" to let QuillPilot choose the best available model
+4. **Visual Confirmation**: Selected models are highlighted in green with a ✓ checkmark
+
+**Model Recommendations:**
+- **For General Writing**: llama3 (Ollama) or gpt-3.5-turbo (OpenAI)
+- **For Code Content**: codellama (Ollama) or gpt-4 (OpenAI)
+- **For Speed**: mistral (Ollama) or gpt-3.5-turbo (OpenAI)
+- **For Quality**: llama3 (Ollama) or gpt-4 (OpenAI)
+
+Your model preferences are saved automatically and used for all content generation.
 
 ### Starting QuillPilot
 
@@ -233,11 +252,27 @@ QuillPilot/
 
 ### AI Provider Settings
 
-Access AI settings through the sidebar or menu:
+Access AI settings through the sidebar (⚙️ Settings icon):
 
-- **Provider Selection**: Choose between Ollama and OpenAI
-- **Model Selection**: Pick specific models for different tasks
-- **Generation Parameters**: Adjust style, length, and other options
+#### New Intuitive Layout (Left-to-Right Design):
+
+**Left Side - Model Selection (Primary Actions):**
+- **Model Dropdowns**: Select your preferred model for each AI provider
+- **Visual Confirmation**: Selected models highlighted in green with checkmarks
+- **Smart Defaults**: Auto-selection chooses the best available model
+- **Model Lists**: See all available models with the selected one highlighted
+
+**Right Side - Status & Configuration (Supporting Info):**
+- **Service Status**: Real-time status of Ollama and OpenAI connections
+- **Setup Instructions**: Step-by-step guides when services need configuration
+- **API Key Management**: Secure local storage of OpenAI API keys
+- **Connection Info**: Available model counts and service health
+
+#### Key Features:
+- **One-Time Setup**: Configure once, use everywhere in the app
+- **Persistent Preferences**: Your model choices are remembered between sessions
+- **Smart Auto-Selection**: QuillPilot picks the best model if you don't specify
+- **Visual Feedback**: Green highlights clearly show which models are active
 
 ### Customization
 
