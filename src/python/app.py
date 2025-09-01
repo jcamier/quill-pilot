@@ -120,6 +120,15 @@ Please format the response as JSON with the following structure:
 # Initialize the content generator
 content_generator = AIContentGenerator()
 
+@app.route('/', methods=['GET', 'HEAD'])
+def root():
+    """Root endpoint for wait-on health checks"""
+    return jsonify({
+        "name": "QuillPilot AI Backend",
+        "status": "running",
+        "version": "1.0.0"
+    })
+
 @app.route('/api/health', methods=['GET'])
 def health_check():
     """Health check endpoint"""
