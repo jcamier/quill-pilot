@@ -48,6 +48,16 @@ const BlogEditor = ({ post, onSave, onDelete, aiModels, aiStatus, onNavigateToSe
   const contentRef = useRef(null);
   const previewRef = useRef(null);
   const streamingContentRef = useRef('');
+  const popoverRef = useRef(null);
+  const [showRephrasePopover, setShowRephrasePopover] = useState(false);
+  const [popoverPosition, setPopoverPosition] = useState({ x: 0, y: 0 });
+  const [selectionRange, setSelectionRange] = useState({ start: 0, end: 0, text: '' });
+  const [showRephraseModal, setShowRephraseModal] = useState(false);
+  const [rephraseLoading, setRephraseLoading] = useState(false);
+  const [rephraseResult, setRephraseResult] = useState('');
+  const [rephraseError, setRephraseError] = useState('');
+  const [rephraseContextBefore, setRephraseContextBefore] = useState('');
+  const [rephraseContextAfter, setRephraseContextAfter] = useState('');
 
   useEffect(() => {
     if (post) {
@@ -82,6 +92,97 @@ const BlogEditor = ({ post, onSave, onDelete, aiModels, aiStatus, onNavigateToSe
       metaDescription: aiService.generateMetaDescription(currentPost.title, content)
     });
   };
+
+  const hideRephrasePopover = () => {
+    setShowRephrasePopover(false);
+  };
+
+  const handleRephraseClick = () => {
+    hideRephrasePopover();
+    setShowRephraseModal(true);
+    setRephraseLoading(true);
+    setRephraseResult('');
+    setRephraseError('');
+
+    // Determine provider/model similar to handleAIGenerate
+    let currentProvider = selectedAiProvider;
+    if (!aiStatus[currentProvider + '_available']) {
+      currentProvider = aiStatus.ollama_available ? 'ollama' : aiStatus.openai_available ? 'openai' : null;
+    }
+
+    if (!currentProvider) {
+      setRephraseError('No AI providers are available. Configure Ollama or OpenAI in Settings.');
+      setRephraseLoading(false);
+      return;
+    }
+
+    const availableModels = aiModels[currentProvider] || [];
+    const selectedModel = preferencesService.getBestModelForProvider(currentProvider, availableModels);
+
+    // Prepare limited context around selection to help the model retain coherence
+    const full = currentPost.content || '';
+    const before = full.substring(0, selectionRange.start);
+    const after = full.substring(selectionRange.end);
+    const contextBefore = before.slice(-1500);
+    const contextAfter = after.slice(0, 1500);
+    setRephraseContextBefore(contextBefore);
+    setRephraseContextAfter(contextAfter);
+
+    aiService.rephraseText({
+      text: selectionRange.text,
+      contextBefore,
+      contextAfter,
+      aiProvider: currentProvider,
+      model: selectedModel,
+      maxTokens: 120 // keep concise per backend limits
+    })
+      .then((rephrased) => {
+        setRephraseResult((rephrased || '').trim());
+      })
+      .catch((error) => {
+        setRephraseError(error.message || 'Failed to generate rephrase');
+      })
+      .finally(() => setRephraseLoading(false));
+  };
+
+  const handleTextSelectionMouseUp = (e) => {
+    const textarea = contentRef.current;
+    if (!textarea) return;
+
+    const start = textarea.selectionStart || 0;
+    const end = textarea.selectionEnd || 0;
+    if (end > start) {
+      const text = textarea.value.substring(start, end);
+      setSelectionRange({ start, end, text });
+      setPopoverPosition({ x: e.clientX + 8, y: e.clientY + 8 });
+      setShowRephrasePopover(true);
+    } else {
+      hideRephrasePopover();
+    }
+  };
+
+  useEffect(() => {
+    const handleGlobalClick = (event) => {
+      const textarea = contentRef.current;
+      const pop = popoverRef.current;
+      if (!textarea) return;
+
+      if (pop && pop.contains(event.target)) return;
+      if (textarea.contains(event.target)) return;
+      hideRephrasePopover();
+    };
+
+    const handleEscape = (event) => {
+      if (event.key === 'Escape') hideRephrasePopover();
+    };
+
+    document.addEventListener('mousedown', handleGlobalClick);
+    document.addEventListener('keydown', handleEscape);
+    return () => {
+      document.removeEventListener('mousedown', handleGlobalClick);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, []);
 
   const handleSave = () => {
     onSave(currentPost);
@@ -576,6 +677,7 @@ const BlogEditor = ({ post, onSave, onDelete, aiModels, aiStatus, onNavigateToSe
                 ref={contentRef}
                 value={currentPost.content}
                 onChange={handleContentChange}
+                onMouseUp={handleTextSelectionMouseUp}
                 placeholder="Start writing your blog post... Use Markdown for formatting."
                 className="flex-1 p-4 border-none outline-none resize-none font-mono text-sm leading-relaxed"
               />
@@ -594,6 +696,95 @@ const BlogEditor = ({ post, onSave, onDelete, aiModels, aiStatus, onNavigateToSe
               </div>
             )}
           </div>
+
+          {showRephrasePopover && (
+            <div
+              ref={popoverRef}
+              className="fixed z-50 bg-white border border-gray-200 shadow-lg rounded-lg px-3 py-2 text-sm text-gray-800"
+              style={{ top: popoverPosition.y, left: popoverPosition.x }}
+            >
+              <button
+                type="button"
+                onClick={handleRephraseClick}
+                className="flex items-center gap-2 px-2 py-1 rounded-md hover:bg-gray-100 active:bg-gray-200 transition-colors"
+                title="Rephrase selected text"
+              >
+                Rephrase
+              </button>
+            </div>
+          )}
+
+          {showRephraseModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center">
+              <div className="absolute inset-0 bg-black bg-opacity-40" onClick={() => setShowRephraseModal(false)} />
+              <div className="relative bg-white w-full max-w-xl mx-auto rounded-xl shadow-2xl border border-gray-200">
+                <div className="p-4 border-b border-gray-200 flex items-center justify-between">
+                  <h3 className="text-base font-semibold text-gray-900">Rephrase</h3>
+                  <button
+                    onClick={() => setShowRephraseModal(false)}
+                    className="text-gray-500 hover:text-gray-700 px-2 py-1 rounded"
+                    title="Close"
+                  >
+                    ✕
+                  </button>
+                </div>
+                <div className="p-4 space-y-3">
+                  <div className="text-xs text-gray-500">Original selection</div>
+                  <div className="p-3 bg-gray-50 border border-gray-200 rounded text-sm text-gray-800 whitespace-pre-wrap max-h-32 overflow-auto">
+                    {selectionRange.text || '(No text selected)'}
+                  </div>
+
+                  <div className="text-xs text-gray-500">AI suggestion</div>
+                  <div className="p-3 bg-white border border-gray-200 rounded text-sm text-gray-900 min-h-[4rem] max-h-48 overflow-auto whitespace-pre-wrap">
+                    {rephraseLoading ? (
+                      <div className="text-gray-500">Generating alternative...</div>
+                    ) : rephraseError ? (
+                      <div className="text-red-600">{rephraseError}</div>
+                    ) : rephraseResult ? (
+                      <>
+                        <span>{rephraseContextBefore}</span>
+                        <span className="underline decoration-2 underline-offset-2">{rephraseResult}</span>
+                        <span>{rephraseContextAfter}</span>
+                      </>
+                    ) : (
+                      <span className="text-gray-500">No result yet</span>
+                    )}
+                  </div>
+                </div>
+                <div className="p-4 border-t border-gray-200 flex items-center justify-end gap-2">
+                  <button
+                    onClick={() => navigator.clipboard && rephraseResult && navigator.clipboard.writeText(rephraseResult)}
+                    disabled={!rephraseResult}
+                    className="px-3 py-2 text-sm rounded border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                  >
+                    Copy
+                  </button>
+                  <button
+                    onClick={() => setShowRephraseModal(false)}
+                    className="px-3 py-2 text-sm rounded border border-gray-300 text-gray-700 hover:bg-gray-50"
+                  >
+                    Close
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (!contentRef.current || !rephraseResult) return;
+                      const textarea = contentRef.current;
+                      const value = textarea.value;
+                      const beforeContext = value.substring(0, selectionRange.start - rephraseContextBefore.length);
+                      const afterContext = value.substring(selectionRange.end + rephraseContextAfter.length);
+                      const newContent = `${beforeContext}${rephraseContextBefore}${rephraseResult}${rephraseContextAfter}${afterContext}`;
+                      updatePost({ content: newContent });
+                      setShowRephraseModal(false);
+                    }}
+                    disabled={!rephraseResult}
+                    className="px-3 py-2 text-sm rounded bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-50"
+                  >
+                    Replace selection
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* SEO Panel */}
           {currentPost.seoKeywords?.length > 0 && (

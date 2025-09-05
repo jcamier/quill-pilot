@@ -130,6 +130,37 @@ class AIService {
     }
   }
 
+  async rephraseText(options) {
+    const {
+      text,
+      contextBefore = null,
+      contextAfter = null,
+      aiProvider = 'ollama',
+      model = null,
+      maxTokens = 1000
+    } = options;
+
+    try {
+      const response = await this.client.post('/rephrase', {
+        text,
+        context_before: contextBefore,
+        context_after: contextAfter,
+        ai_provider: aiProvider,
+        model,
+        max_tokens: maxTokens
+      });
+
+      if (response.success) {
+        return response.rephrased;
+      } else {
+        throw new Error(response.error || 'Failed to rephrase');
+      }
+    } catch (error) {
+      console.error('Rephrase failed:', error.message);
+      throw error;
+    }
+  }
+
   async generateContentStream(options, onChunk, onComplete, onError) {
     const {
       prompt,

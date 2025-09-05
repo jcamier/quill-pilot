@@ -89,6 +89,18 @@ class ContentGenerationRequest(BaseModel):
             raise ValueError('AI provider must be: openai or ollama')
         return v
 
+class RephraseRequest(BaseModel):
+    text: str = Field(..., min_length=1, max_length=100, description="Text to rephrase")
+    ai_provider: str = Field("ollama", description="AI provider to use")
+    model: Optional[str] = Field(None, description="Specific model to use")
+    max_tokens: int = Field(100, ge=50, le=200, description="Maximum tokens to generate")
+
+    @validator('ai_provider')
+    def validate_ai_provider(cls, v):
+        if v not in ['openai', 'ollama']:
+            raise ValueError('AI provider must be: openai or ollama')
+        return v
+
 # Response models
 class HealthResponse(BaseModel):
     status: str
@@ -107,6 +119,11 @@ class BlogPostResponse(BaseModel):
 class ContentResponse(BaseModel):
     success: bool
     content: Optional[str] = None
+    error: Optional[str] = None
+
+class RephraseResponse(BaseModel):
+    success: bool
+    rephrased: Optional[str] = None
     error: Optional[str] = None
 
 class RootResponse(BaseModel):
@@ -330,6 +347,61 @@ async def generate_blog(blog_request: BlogGenerationRequest, request: Request):
             blog_post=blog_post
         )
 
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/rephrase", response_model=RephraseResponse)
+async def rephrase_text(req: RephraseRequest, request: Request):
+    """Rephrase given text while preserving meaning."""
+    # Rate limiting: 10 rephrases per minute
+    check_rate_limit(request, max_requests=10, window_minutes=1)
+
+    try:
+        if not req.text:
+            raise HTTPException(status_code=400, detail="Text is required")
+
+        prompt = (
+f"""
+You will be given a short phrase of text. Rephrase it while preserving its original meaning and the same casing style.
+
+Only return the rephrased phrase.  
+Do not add any explanations, formatting, or labels.  
+Do not include quotes or any extra words.
+
+### Input:
+'{req.text}'
+
+Return your output as a JSON object in this format:
+
+{{'rephrased': '<rephrased text>'}}
+
+Only include the rephrased text in the 'rephrased' field.
+"""
+        )
+
+        if req.ai_provider == "openai":
+            default_model = req.model or "gpt-3.5-turbo"
+            content = await content_generator.generate_content_openai(
+                prompt, default_model, req.max_tokens
+            )
+        else:
+            default_model = req.model or "llama3"
+            content = await content_generator.generate_content_ollama(
+                prompt, default_model, req.max_tokens
+            )
+        
+        
+        # Parse the JSON response from the AI model
+        try:
+            parsed_content = json.loads(content)
+            rephrased_text = parsed_content.get('rephrased')
+
+        except json.JSONDecodeError as e:
+            print(f"JSON parse error: {e}")
+            # If JSON parsing fails, use the raw content
+            rephrased_text = content.strip()
+
+        return RephraseResponse(success=True, rephrased=rephrased_text)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
